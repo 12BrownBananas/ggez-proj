@@ -5,7 +5,7 @@ use ggez::conf::{WindowMode, WindowSetup};
 use ggez::graphics::{Color, Text};
 use ggez::input::keyboard::{KeyCode, KeyInput};
 
-use util::input_manager::{self, InputProcessor};
+use util::input_manager;
 
 enum DeltaTimeFormat {
     Nanos,
@@ -14,15 +14,15 @@ enum DeltaTimeFormat {
     Secs
 }
 
-struct GameState<T: util::input_manager::InputProcessor> {
+struct GameState {
     dt: std::time::Duration,
     dt_format: DeltaTimeFormat,
     dt_text_display: Text,
     display_dt: bool,
-    input_manager: util::input_manager::InputManager<T>,
+    input_manager: util::input_manager::InputManager,
 }
-impl<T: util::input_manager::InputProcessor> GameState<T> {
-    fn new() -> GameState<T> {
+impl GameState {
+    fn new() -> GameState {
         GameState {
             dt: std::time::Duration::new(0, 0),
             dt_format: DeltaTimeFormat::Nanos,
@@ -46,11 +46,11 @@ impl<T: util::input_manager::InputProcessor> GameState<T> {
         };
         return format!("{}{}", delta_time_string, delta_time_string_suffix);
     }
-    fn get_input_manager(&mut self) -> &mut input_manager::InputManager<T> {
+    fn get_input_manager(&mut self) -> &mut input_manager::InputManager {
         &mut self.input_manager
     }
 }
-impl<T: util::input_manager::InputProcessor> ggez::event::EventHandler<GameError> for GameState<T> {
+impl ggez::event::EventHandler<GameError> for GameState {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
         const DESIRED_FPS: u32 = 60;
         while ctx.time.check_update_time(DESIRED_FPS) {}
@@ -64,7 +64,6 @@ impl<T: util::input_manager::InputProcessor> ggez::event::EventHandler<GameError
                     input_manager::InputState::Held => {println!("Held")},
                     input_manager::InputState::Released => {println!("Released")},
                     input_manager::InputState::AtRest => {println!("At Rest")}
-                    _=> {}
                 }
             },
             None => {}
@@ -112,13 +111,38 @@ impl<T: util::input_manager::InputProcessor> ggez::event::EventHandler<GameError
         self.input_manager.process_input_released(input_manager::InputType::Keyboard(input.keycode.unwrap()));
         Ok(())
     }
+
+    fn mouse_button_down_event(
+        &mut self,
+        _ctx: &mut Context,
+        _button: ggez::input::mouse::MouseButton,
+        _x: f32,
+        _y: f32,
+    ) -> Result<(), GameError> {
+        self.input_manager.process_input_pressed(input_manager::InputType::Mouse(_button));
+        Ok(())
+    }
+
+    /// A mouse button was released
+    fn mouse_button_up_event(
+        &mut self,
+        _ctx: &mut Context,
+        _button: ggez::input::mouse::MouseButton,
+        _x: f32,
+        _y: f32,
+    ) -> Result<(), GameError> {
+        self.input_manager.process_input_released(input_manager::InputType::Mouse(_button));
+        Ok(())
+    }
 }
 
 
 fn main() {
-    let mut state: GameState<input_manager::KeyboardInputProcessor> = GameState::new();
+    let mut state  = GameState::new();
     let accept_key = Box::new(input_manager::KeyboardInputProcessor::new(vec!(ggez::input::keyboard::KeyCode::A, ggez::input::keyboard::KeyCode::Space)));
     state.get_input_manager().register_input(input_manager::InputSemantic::Accept, accept_key);
+    let accept_mouse_button = Box::new(input_manager::MouseInputProcessor::new(vec!(ggez::input::mouse::MouseButton::Left)));
+    state.get_input_manager().register_input(input_manager::InputSemantic::Accept, accept_mouse_button);
     
     let (ctx, event_loop) = ContextBuilder::new("ggez-proj", "Act-Novel")
         .window_setup(WindowSetup::default().title("ggez project"))

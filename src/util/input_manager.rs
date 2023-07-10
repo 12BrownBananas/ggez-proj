@@ -62,37 +62,94 @@ impl InputProcessor for KeyboardInputProcessor {
     }
 }
 
+pub struct MouseInputProcessor {
+    state: InputState,
+    input_list: Vec<ggez::input::mouse::MouseButton>
+}
+impl MouseInputProcessor {
+    pub fn new(input_list: Vec<ggez::input::mouse::MouseButton>) -> MouseInputProcessor {
+        MouseInputProcessor {
+            state: InputState::AtRest,
+            input_list: input_list
+        }
+    }
+}
+impl InputProcessor for MouseInputProcessor {
+    fn process_input_pressed(&mut self) {
+        self.state = InputState::Pressed;
+    }
+    fn process_input_released(&mut self) {
+        self.state = InputState::Released;
+    }
+    fn process_input(&mut self) {
+        match self.state {
+            InputState::Pressed => {self.state = InputState::Held},
+            InputState::Released => {self.state = InputState::AtRest},
+            _ => {}
+        }
+    } //All this function does is roll the state over from "pressed" to "held" and "released" to "atrest"
+    fn get_input_state(&self) -> InputState {
+        self.state
+    }
+    fn has_input(&self, input: InputType) -> bool {
+        for i in self.input_list.as_slice() {
+            if InputType::Mouse(*i) == input {
+                return true;
+            }
+        }
+        false
+    }
+}
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum InputState {
+    AtRest,
+    Released,
     Pressed,
     Held,
-    Released,
-    AtRest
 }
 
-pub struct InputManager<T: InputProcessor> {
-    input_map: std::collections::HashMap<InputSemantic, usize>,
-    input_processors: Vec<Box<T>>,
+pub struct InputManager {
+    input_map: std::collections::HashMap<InputSemantic, Vec<usize>>,
+    input_processors: Vec<Box<dyn InputProcessor>>,
 }
-impl<T: InputProcessor> InputManager<T> {
-    pub fn new() -> InputManager<T> {
+impl InputManager {
+    pub fn new() -> InputManager {
         InputManager { 
             input_map: std::collections::HashMap::new(), 
             input_processors: Vec::new(),
         }
     }
-    pub fn register_input(&mut self, semantic: InputSemantic, input_processor: Box<T>) {
+    fn get_highest_priority_input(&self, list_of_inputs: &Vec<InputState>) -> InputState {
+        let mut previous_best = InputState::AtRest;
+        for &i in list_of_inputs {
+            if previous_best < i {
+                previous_best = i;
+            }
+        }
+        return previous_best;
+    }
+    pub fn register_input(&mut self, semantic: InputSemantic, input_processor: Box<dyn InputProcessor>) {
         self.input_processors.push(input_processor);
-        self.input_map.insert(semantic, self.input_processors.len()-1);
+        match self.input_map.get_mut(&semantic) {
+            Some(vector) => { vector.push(self.input_processors.len()-1); }
+            None => { self.input_map.insert(semantic, vec!(self.input_processors.len()-1)); }
+        }
     }
     pub fn get_input_state(&self, semantic: InputSemantic) -> Option<InputState> {
         match self.input_map.get(&semantic) {
-            Some(&index) => {
-                match self.input_processors.get(index) {
-                    Some(wrapper) => Some(wrapper.get_input_state()),
-                    None => None
+            Some(index_vec) => {
+                let mut input_accumulator = Vec::new();
+                for &index in index_vec {
+                    match self.input_processors.get(index) {
+                        Some(wrapper) => { input_accumulator.push(wrapper.get_input_state()); },
+                        None => {}
+                    }
                 }
+                if input_accumulator.len() > 0 {
+                    return Some(self.get_highest_priority_input(&input_accumulator));
+                }
+                None
             },
             None => None
         }
