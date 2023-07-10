@@ -5,7 +5,7 @@ use ggez::conf::{WindowMode, WindowSetup};
 use ggez::graphics::{Color, Text};
 use ggez::input::keyboard::{KeyCode, KeyInput};
 
-use util::input_manager;
+use util::input_manager::{self, InputProcessor};
 
 enum DeltaTimeFormat {
     Nanos,
@@ -14,19 +14,21 @@ enum DeltaTimeFormat {
     Secs
 }
 
-struct GameState {
+struct GameState<T: util::input_manager::InputProcessor> {
     dt: std::time::Duration,
     dt_format: DeltaTimeFormat,
     dt_text_display: Text,
-    display_dt: bool
+    display_dt: bool,
+    input_manager: util::input_manager::InputManager<T>,
 }
-impl GameState {
-    fn new() -> GameState {
+impl<T: util::input_manager::InputProcessor> GameState<T> {
+    fn new() -> GameState<T> {
         GameState {
             dt: std::time::Duration::new(0, 0),
             dt_format: DeltaTimeFormat::Nanos,
             dt_text_display: Text::new(""),
             display_dt: true,
+            input_manager: util::input_manager::InputManager::new()
         }
     }
     pub fn get_dt_string(&self) -> String {
@@ -44,12 +46,31 @@ impl GameState {
         };
         return format!("{}{}", delta_time_string, delta_time_string_suffix);
     }
+    fn get_input_manager(&mut self) -> &mut input_manager::InputManager<T> {
+        &mut self.input_manager
+    }
 }
-impl ggez::event::EventHandler<GameError> for GameState {
+impl<T: util::input_manager::InputProcessor> ggez::event::EventHandler<GameError> for GameState<T> {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
         const DESIRED_FPS: u32 = 60;
         while ctx.time.check_update_time(DESIRED_FPS) {}
         self.dt = ctx.time.delta();
+        /* You can check the input status from anywhere like this, not just the update loop */
+        let accept_check = self.input_manager.get_input_state(input_manager::InputSemantic::Accept);
+        match accept_check {
+            Some(state) => {
+                match state {
+                    input_manager::InputState::Pressed => {println!("Pressed")},
+                    input_manager::InputState::Held => {println!("Held")},
+                    input_manager::InputState::Released => {println!("Released")},
+                    input_manager::InputState::AtRest => {println!("At Rest")}
+                    _=> {}
+                }
+            },
+            None => {}
+        }
+        self.input_manager.process_input();
+
         Ok(())
     }
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
@@ -70,6 +91,9 @@ impl ggez::event::EventHandler<GameError> for GameState {
         input: KeyInput,
         _repeated: bool
     ) -> Result<(), GameError> {
+        if !_repeated {
+            self.input_manager.process_input_pressed(input_manager::InputType::Keyboard(input.keycode.unwrap()));
+        }
         if input.keycode == Some(KeyCode::Escape) {
             self.dt_format = match self.dt_format {
                 DeltaTimeFormat::Micros => DeltaTimeFormat::Millis,
@@ -80,14 +104,21 @@ impl ggez::event::EventHandler<GameError> for GameState {
         }
         Ok(())
     }
+    fn key_up_event(
+        &mut self,
+        _ctx: &mut Context,
+        input: KeyInput
+    ) -> Result<(), GameError> {
+        self.input_manager.process_input_released(input_manager::InputType::Keyboard(input.keycode.unwrap()));
+        Ok(())
+    }
 }
 
+
 fn main() {
-    let state = GameState::new();
-    
-    let mut input_manager = input_manager::InputManager::new();
-    let mut accept_key = Box::new(input_manager::KeyboardInputProcessor::new(vec!(ggez::input::keyboard::KeyCode::A, ggez::input::keyboard::KeyCode::Space)));
-    input_manager.register_input(input_manager::InputSemantic::Accept, &mut accept_key);
+    let mut state: GameState<input_manager::KeyboardInputProcessor> = GameState::new();
+    let accept_key = Box::new(input_manager::KeyboardInputProcessor::new(vec!(ggez::input::keyboard::KeyCode::A, ggez::input::keyboard::KeyCode::Space)));
+    state.get_input_manager().register_input(input_manager::InputSemantic::Accept, accept_key);
     
     let (ctx, event_loop) = ContextBuilder::new("ggez-proj", "Act-Novel")
         .window_setup(WindowSetup::default().title("ggez project"))
