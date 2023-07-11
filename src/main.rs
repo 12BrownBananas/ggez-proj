@@ -60,10 +60,18 @@ impl ggez::event::EventHandler<GameError> for GameState {
         match accept_check {
             Some(state) => {
                 match state {
-                    input_manager::InputState::Pressed => {println!("Pressed")},
-                    input_manager::InputState::Held => {println!("Held")},
-                    input_manager::InputState::Released => {println!("Released")},
-                    input_manager::InputState::AtRest => {println!("At Rest")}
+                    input_manager::InputState::Pressed => {println!("Accept Pressed")},
+                    _ => {}
+                }
+            },
+            None => {}
+        }
+        let back_check = self.input_manager.get_input_state(input_manager::InputSemantic::Back);
+        match back_check {
+            Some(state) => {
+                match state {
+                    input_manager::InputState::Pressed => {println!("Back Pressed")},
+                    _ => {}
                 }
             },
             None => {}
@@ -143,7 +151,11 @@ fn main() {
     state.get_input_manager().register_input(input_manager::InputSemantic::Accept, accept_key);
     let accept_mouse_button = Box::new(input_manager::MouseInputProcessor::new(vec!(ggez::input::mouse::MouseButton::Left)));
     state.get_input_manager().register_input(input_manager::InputSemantic::Accept, accept_mouse_button);
-    
+    let back_key = Box::new(input_manager::KeyboardInputProcessor::new(vec!(ggez::input::keyboard::KeyCode::Back)));
+    state.get_input_manager().register_input(input_manager::InputSemantic::Back, back_key);
+    let back_mouse_button = Box::new(input_manager::MouseInputProcessor::new(vec!(ggez::input::mouse::MouseButton::Right)));
+    state.get_input_manager().register_input(input_manager::InputSemantic::Back, back_mouse_button);
+
     let (ctx, event_loop) = ContextBuilder::new("ggez-proj", "Act-Novel")
         .window_setup(WindowSetup::default().title("ggez project"))
         .window_mode(
