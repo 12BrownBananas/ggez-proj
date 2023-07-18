@@ -6,6 +6,7 @@ use ggez::graphics::{Color, Text};
 use ggez::input::keyboard::{KeyCode, KeyInput};
 
 use util::input_manager;
+use util::data_generator;
 
 enum DeltaTimeFormat {
     Nanos,
@@ -155,9 +156,22 @@ fn main() {
     let right_key = Box::new(input_manager::KeyboardInputProcessor::new(vec!(ggez::input::keyboard::KeyCode::D, ggez::input::keyboard::KeyCode::Right)));
     state.get_input_manager().register_input(input_manager::InputSemantic::Right, right_key);
 
+    data_generator::init(1, 10, 4, false);
+    let res = data_generator::get_input_set(data_generator::SetConfig{size: 5, target: "".to_string(), validator: Some(data_generator::value_is_positive_integer), difficulties: vec!(data_generator::InputDifficulty::Easy, data_generator::InputDifficulty::Moderate, data_generator::InputDifficulty::Hard)});
+    match res {
+        Ok(set) => {
+            println!("Generated set of boards: {{");
+            for board in set {
+                println!("   {:?}", board.get_board_info())
+            }
+            println!("}}");
+        },
+        Err(e) => {println!("{}", e)}
+    }
+
     /* Main game loop */
-    let (ctx, event_loop) = ContextBuilder::new("ggez-proj", "Act-Novel")
-        .window_setup(WindowSetup::default().title("ggez project"))
+    let (ctx, event_loop) = ContextBuilder::new("any4", "Act-Novel")
+        .window_setup(WindowSetup::default().title("Any4"))
         .window_mode(
             WindowMode::default()
                 .dimensions(960.0, 540.0)
