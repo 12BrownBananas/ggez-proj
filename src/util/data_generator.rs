@@ -15,10 +15,25 @@ const DATA_FILES_LIST: &'static [&'static str] = &[INPUT_FILE_NAME];
 /* #region Public Interface */
 pub type TargetValidatorFunc = fn(f32) -> bool;
 pub struct SetConfig {
-    pub size: usize,
-    pub target: String,
-    pub validator: Option<TargetValidatorFunc>,
-    pub difficulties: Vec<InputDifficulty>
+    size: usize,
+    target: String,
+    validator: Option<TargetValidatorFunc>,
+    difficulties: Vec<InputDifficulty>
+}
+impl SetConfig {
+    pub fn new(size: usize, target_value: Option<f32>, validator_func: Option<TargetValidatorFunc>, difficulties: Vec<InputDifficulty>) -> SetConfig {
+        let tar;
+        match target_value {
+            Some(val) => { tar = val.to_string() },
+            None => {tar = "".to_string()}
+        }
+        return SetConfig {
+            size: size,
+            target: tar,
+            validator: validator_func,
+            difficulties: difficulties
+        }
+    }
 }
 #[derive(Debug)]
 pub struct Board {

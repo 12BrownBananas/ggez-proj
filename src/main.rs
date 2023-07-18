@@ -157,7 +157,7 @@ fn main() {
     state.get_input_manager().register_input(input_manager::InputSemantic::Right, right_key);
 
     data_generator::init(1, 10, 4, false);
-    let res = data_generator::get_input_set(data_generator::SetConfig{size: 5, target: "".to_string(), validator: Some(data_generator::value_is_positive_integer), difficulties: vec!(data_generator::InputDifficulty::Easy, data_generator::InputDifficulty::Moderate, data_generator::InputDifficulty::Hard)});
+    let res = data_generator::get_input_set(data_generator::SetConfig::new(5, None, Some(data_generator::value_is_positive_integer), vec!(data_generator::InputDifficulty::Easy, data_generator::InputDifficulty::Moderate, data_generator::InputDifficulty::Hard)));
     match res {
         Ok(set) => {
             println!("Generated set of boards: {{");
