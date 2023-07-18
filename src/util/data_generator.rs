@@ -52,57 +52,8 @@ pub enum InputDifficulty {
     Moderate,
     Hard
 }
-pub fn value_is_integer(val: f32) -> bool {
-    return val.floor() == val;
-}
-pub fn value_is_positive_integer(val: f32) -> bool {
-    return value_is_integer(val) && val >= 0.0;
-}
-pub fn init(min_val: i32, max_val: i32, input_size: usize, force_regen: bool) {
-    let mut safe_to_continue = true;
-    /* Ensure output directories exist */
-    match fs::create_dir_all("rsc/data") {
-        Ok(_) => {},
-        Err(_) => { safe_to_continue = Path::new("rsc").is_dir() && Path::new("rsc/data").is_dir() },
-    }
-    if !safe_to_continue { panic!("Data directory did not exist and could not be created. Terminating...") }
-    if force_regen || !verify_data_integrity() { populate_output_directory(min_val, max_val+1, input_size) }
-}
-pub fn get_input_set(config: SetConfig) -> Result<Vec<Board>, String>  {
-    if verify_data_integrity() == false { return Err("Data integrity could not be verified. Input set could not be generated.".to_string()); }
-    let contents = std::fs::read_to_string(INPUT_FILE_NAME).expect("");
-    let json_structure: HashMap<String, DifficultyPools> = serde_json::from_str(&contents).expect("");
-    return get_set_of_inputs(json_structure, config);
-}
-/* #endregion */
-
-/* #region Secret Inner-Workings */
-
-#[derive(Deserialize, Serialize, Clone, Debug)]
-enum OpType {
-    Plus,
-    Minus,
-    Multiply,
-    Divide,
-    None
-}
-#[derive(Deserialize, Serialize, Debug, Clone)]
-struct OperationMarker {
-    input_vector: Vec<f32>,
-    op_type: OpType,
-}
 #[derive(Serialize, Deserialize, Clone)]
-struct SerializableNode {
-    data: OperationMarker,
-    children: Vec<SerializableNode>
-}
-struct InputRanking {
-    target: String,
-    difficulty: InputDifficulty,
-    input: Vec<f32>
-}
-#[derive(Serialize, Deserialize, Clone)]
-struct DifficultyPools {
+pub struct DifficultyPools {
     easy: Vec<Vec<f32>>,
     moderate: Vec<Vec<f32>>,
     hard: Vec<Vec<f32>>
@@ -142,6 +93,96 @@ impl DifficultyPools {
         else if pool == &self.hard { return Ok(InputDifficulty::Hard) }
         else { return Err("Supplied pool reference not bound to this pool.".to_string()) }
     }
+}
+pub fn value_is_integer(val: f32) -> bool {
+    return val.floor() == val;
+}
+pub fn value_is_positive_integer(val: f32) -> bool {
+    return value_is_integer(val) && val >= 0.0;
+}
+pub fn init(min_val: i32, max_val: i32, input_size: usize, force_regen: bool) {
+    let mut safe_to_continue = true;
+    /* Ensure output directories exist */
+    match fs::create_dir_all("rsc/data") {
+        Ok(_) => {},
+        Err(_) => { safe_to_continue = Path::new("rsc").is_dir() && Path::new("rsc/data").is_dir() },
+    }
+    if !safe_to_continue { panic!("Data directory did not exist and could not be created. Terminating...") }
+    if force_regen || !verify_data_integrity() { populate_output_directory(min_val, max_val+1, input_size) }
+}
+pub fn get_deserialized_input_data_pool_map() -> Result<HashMap<String, DifficultyPools>, String>  {
+    if verify_data_integrity() == false { return Err("Data integrity could not be verified. Input data could not be deserialized.".to_string()); }
+    let contents = std::fs::read_to_string(INPUT_FILE_NAME).expect("");
+    let json_structure: HashMap<String, DifficultyPools> = serde_json::from_str(&contents).expect("");
+    return Ok(json_structure);
+}
+pub fn get_set_of_inputs(mut pool_map: HashMap<String, DifficultyPools>, config: &SetConfig) -> Result<Vec<Board>, String> { //returns an error if the set could not be created to spec
+    let mut result_vector = Vec::new();
+    pool_map = remove_inputs_without_matching_difficulties(pool_map, &config.difficulties);
+    while result_vector.len() < config.size {
+        let &difficulty = config.difficulties.get(rand::random::<usize>()%config.difficulties.len()).expect("");
+        let mut target = config.target.clone();
+        if config.target == "" { 
+            match get_random_viable_target(&pool_map, config.validator) {
+                Ok(val) => {target = val},
+                Err(e) => { return Err(e) } //Error implies this is impossible given input constraints, so we return
+            }
+        } 
+        match get_input_of_difficulty_for_target(&pool_map, target.as_str(), difficulty) {
+            Ok((input, index, pool_difficulty)) => {
+                let map = pool_map.get_mut(target.as_str()).expect("");
+                match pool_difficulty {
+                    InputDifficulty::Easy => {
+                        map.easy.remove(index);
+                    },
+                    InputDifficulty::Moderate => {
+                        map.moderate.remove(index);
+                    },
+                    InputDifficulty::Hard => {
+                        map.hard.remove(index);
+                    }
+                }
+                result_vector.push(Board{ target: target.parse::<f32>().unwrap(), input: input, difficulty: pool_difficulty } );
+            },
+            Err(e) => {
+                //we found no viable inputs for the given target
+                if config.target != "" { return Err(e); } //Since the target is fixed, this set has become impossible to create
+                else { //Else it's probably still possible with some other target
+                    pool_map.remove(&target); //So let's remove the target with no inputs
+                    if pool_map.keys().len() <= 0 { return Err(e) } //And if that made our data set empty, then it means we cannot finish generating this input
+                    //Note that this works because the error branch is only ever reached when NO pool is populated, irrespective of difficulty specifier.
+                } 
+            }
+        }
+    }
+    Ok(result_vector)
+}
+/* #endregion */
+
+/* #region Secret Inner-Workings */
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+enum OpType {
+    Plus,
+    Minus,
+    Multiply,
+    Divide,
+    None
+}
+#[derive(Deserialize, Serialize, Debug, Clone)]
+struct OperationMarker {
+    input_vector: Vec<f32>,
+    op_type: OpType,
+}
+#[derive(Serialize, Deserialize, Clone)]
+struct SerializableNode {
+    data: OperationMarker,
+    children: Vec<SerializableNode>
+}
+struct InputRanking {
+    target: String,
+    difficulty: InputDifficulty,
+    input: Vec<f32>
 }
 
 struct FloatingPointPair {
@@ -206,47 +247,6 @@ fn remove_inputs_without_matching_difficulties(pool_map: HashMap<String, Difficu
     return new_pool_map;
 }
 
-fn get_set_of_inputs(mut pool_map: HashMap<String, DifficultyPools>, config: SetConfig) -> Result<Vec<Board>, String> { //returns an error if the set could not be created to spec
-    let mut result_vector = Vec::new();
-    pool_map = remove_inputs_without_matching_difficulties(pool_map, &config.difficulties);
-    while result_vector.len() < config.size {
-        let &difficulty = config.difficulties.get(rand::random::<usize>()%config.difficulties.len()).expect("");
-        let mut target = config.target.clone();
-        if config.target == "" { 
-            match get_random_viable_target(&pool_map, config.validator) {
-                Ok(val) => {target = val},
-                Err(e) => { return Err(e) } //Error implies this is impossible given input constraints, so we return
-            }
-        } 
-        match get_input_of_difficulty_for_target(&pool_map, target.as_str(), difficulty) {
-            Ok((input, index, pool_difficulty)) => {
-                let map = pool_map.get_mut(target.as_str()).expect("");
-                match pool_difficulty {
-                    InputDifficulty::Easy => {
-                        map.easy.remove(index);
-                    },
-                    InputDifficulty::Moderate => {
-                        map.moderate.remove(index);
-                    },
-                    InputDifficulty::Hard => {
-                        map.hard.remove(index);
-                    }
-                }
-                result_vector.push(Board{ target: target.parse::<f32>().unwrap(), input: input, difficulty: pool_difficulty } );
-            },
-            Err(e) => {
-                //we found no viable inputs for the given target
-                if config.target != "" { return Err(e); } //Since the target is fixed, this set has become impossible to create
-                else { //Else it's probably still possible with some other target
-                    pool_map.remove(&target); //So let's remove the target with no inputs
-                    if pool_map.keys().len() <= 0 { return Err(e) } //And if that made our data set empty, then it means we cannot finish generating this input
-                    //Note that this works because the error branch is only ever reached when NO pool is populated, irrespective of difficulty specifier.
-                } 
-            }
-        }
-    }
-    Ok(result_vector)
-}
 fn get_random_viable_target(pool_map: &HashMap<String, DifficultyPools>, validator: Option<TargetValidatorFunc>) -> Result<String, String> {
     let mut keys: Vec<String> = pool_map.keys().cloned().collect();
     let mut idx = rand::random::<usize>()%keys.len();
