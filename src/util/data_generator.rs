@@ -27,17 +27,17 @@ pub struct SetConfig {
     difficulties: Vec<InputDifficulty>
 }
 impl SetConfig {
-    pub fn new(size: usize, target_value: Option<Fraction>, validator_func: Option<TargetValidatorFunc>, difficulties: Vec<InputDifficulty>) -> SetConfig {
-        let tar;
+    pub fn new(size: usize, target_value: Option<Fraction>, validator: Option<TargetValidatorFunc>, difficulties: Vec<InputDifficulty>) -> SetConfig {
+        let target;
         match target_value {
-            Some(val) => { tar = val.to_string() },
-            None => {tar = "".to_string()}
+            Some(val) => { target = val.to_string() },
+            None => {target = "".to_string()}
         }
         return SetConfig {
-            size: size,
-            target: tar,
-            validator: validator_func,
-            difficulties: difficulties
+            size,
+            target,
+            validator,
+            difficulties
         }
     }
 }
@@ -458,7 +458,7 @@ fn rank_input(input: &UnidirectionalNode) -> Vec<InputRanking> {
         else if occurrences > 2 && occurrences <= 5 {
             difficulty = InputDifficulty::Moderate;
         }
-        input_ranking.push(InputRanking{target: k.clone(), difficulty: difficulty, input: input.data.input_vector_to_i32().expect("Input ranking failed.") })
+        input_ranking.push(InputRanking{target: k.clone(), difficulty, input: input.data.input_vector_to_i32().expect("Input ranking failed.") })
     }
     return input_ranking;
 }
