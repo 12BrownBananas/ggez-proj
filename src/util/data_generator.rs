@@ -49,7 +49,7 @@ pub struct Board {
 }
 impl Board {
     pub fn get_board_info(&self) -> String {
-        format!("Input Vector: {:?}, Target Value: {:?}, Difficulty Rating: {:?}", self.input, self.target.to_string(), difficulty_to_string(self.difficulty))
+        format!("Input Vector: {:?}, Target Value: {}, Difficulty Rating: {}", self.input, self.target.to_string(), difficulty_to_string(self.difficulty))
     }
 }
 #[derive(Debug, Clone, Copy)]
