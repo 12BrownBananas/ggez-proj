@@ -27,7 +27,7 @@ pub struct SetConfig {
     difficulties: Vec<InputDifficulty>
 }
 impl SetConfig {
-    pub fn new(size: usize, target_value: Option<f32>, validator_func: Option<TargetValidatorFunc>, difficulties: Vec<InputDifficulty>) -> SetConfig {
+    pub fn new(size: usize, target_value: Option<Fraction>, validator_func: Option<TargetValidatorFunc>, difficulties: Vec<InputDifficulty>) -> SetConfig {
         let tar;
         match target_value {
             Some(val) => { tar = val.to_string() },
@@ -44,12 +44,12 @@ impl SetConfig {
 #[derive(Debug)]
 pub struct Board {
     pub input: Vec<i32>,
-    pub target: f32,
+    pub target: Fraction,
     pub difficulty: InputDifficulty
 }
 impl Board {
     pub fn get_board_info(&self) -> String {
-        format!("Input Vector: {:?}, Target Value: {:?}, Difficulty Rating: {:?}", self.input, self.target, difficulty_to_string(self.difficulty))
+        format!("Input Vector: {:?}, Target Value: {:?}, Difficulty Rating: {:?}", self.input, self.target.to_string(), difficulty_to_string(self.difficulty))
     }
 }
 #[derive(Debug, Clone, Copy)]
@@ -148,7 +148,7 @@ pub fn get_set_of_inputs(mut pool_map: HashMap<String, DifficultyPools>, config:
                         map.hard.remove(index);
                     }
                 }
-                result_vector.push(Board{ target: target.parse::<f32>().unwrap(), input: input, difficulty: pool_difficulty } );
+                result_vector.push(Board{ target: Fraction::from_str(&target).expect(&format!("Could not convert target {:?} to Fraction.", target)), input: input, difficulty: pool_difficulty } );
             },
             Err(e) => {
                 //we found no viable inputs for the given target

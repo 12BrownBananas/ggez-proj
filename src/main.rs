@@ -86,7 +86,10 @@ impl ggez::event::EventHandler<GameError> for GameState {
         _repeated: bool
     ) -> Result<(), GameError> {
         if !_repeated {
-            self.input_manager.process_input_pressed(input_manager::InputType::Keyboard(input.keycode.unwrap()));
+            match input.keycode {
+                Some(key) => { self.input_manager.process_input_pressed(input_manager::InputType::Keyboard(key)); },
+                None => {}
+            }
         }
         if input.keycode == Some(KeyCode::Escape) {
             self.dt_format = match self.dt_format {
@@ -103,7 +106,10 @@ impl ggez::event::EventHandler<GameError> for GameState {
         _ctx: &mut Context,
         input: KeyInput
     ) -> Result<(), GameError> {
-        self.input_manager.process_input_released(input_manager::InputType::Keyboard(input.keycode.unwrap()));
+        match input.keycode {
+            Some(key) => { self.input_manager.process_input_released(input_manager::InputType::Keyboard(key)); },
+            None => {}
+        }
         Ok(())
     }
 
@@ -157,7 +163,7 @@ fn main() {
     state.get_input_manager().register_input(input_manager::InputSemantic::Right, right_key);
 
     data_generator::init(1, 10, 4, false);
-    let config = data_generator::SetConfig::new(5, None, Some(data_generator::value_is_positive_integer), vec!(data_generator::InputDifficulty::Easy, data_generator::InputDifficulty::Moderate, data_generator::InputDifficulty::Hard));
+    let config = data_generator::SetConfig::new(10, None, Some(data_generator::value_is_positive_integer), vec!(data_generator::InputDifficulty::Easy, data_generator::InputDifficulty::Moderate, data_generator::InputDifficulty::Hard));
     
     let pool_map = data_generator::get_deserialized_input_data_pool_map().expect("");
     let res = data_generator::get_set_of_inputs(pool_map.clone(), &config);
