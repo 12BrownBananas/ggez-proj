@@ -1,13 +1,19 @@
+use queues::IsQueue;
 use slab_tree::*;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::ser::SerializeStruct;
+use serde::de::{self, Visitor, SeqAccess, MapAccess};
 use std::fs::File;
 use std::io::prelude::*;
+use std::str::FromStr;
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::ops;
 use std::fs;
 use std::path::Path;
-use rand;
+use fraction::{Fraction, Decimal};
+use queues;
+use std::fmt;
 
 const INPUT_FILE_NAME: &str = "rsc/data/difficulty_pools.json";
 const DATA_FILES_LIST: &'static [&'static str] = &[INPUT_FILE_NAME];
@@ -37,7 +43,7 @@ impl SetConfig {
 }
 #[derive(Debug)]
 pub struct Board {
-    pub input: Vec<f32>,
+    pub input: Vec<i32>,
     pub target: f32,
     pub difficulty: InputDifficulty
 }
@@ -54,16 +60,16 @@ pub enum InputDifficulty {
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub struct DifficultyPools {
-    easy: Vec<Vec<f32>>,
-    moderate: Vec<Vec<f32>>,
-    hard: Vec<Vec<f32>>
+    easy: Vec<Vec<i32>>,
+    moderate: Vec<Vec<i32>>,
+    hard: Vec<Vec<i32>>
 }
 impl DifficultyPools {
     fn new() -> DifficultyPools {
         DifficultyPools { easy: Vec::new(), moderate: Vec::new(), hard: Vec::new() }
     }
-    fn get_closest_matching_populated_pool(&self, difficulty: InputDifficulty) -> Result<&Vec<Vec<f32>>, String> {
-        let mut priority_vec: Vec<&Vec<Vec<f32>>> = Vec::new();
+    fn get_closest_matching_populated_pool(&self, difficulty: InputDifficulty) -> Result<&Vec<Vec<i32>>, String> {
+        let mut priority_vec: Vec<&Vec<Vec<i32>>> = Vec::new();
         match difficulty {
             InputDifficulty::Easy => {
                 priority_vec.push(&self.easy);
@@ -87,7 +93,7 @@ impl DifficultyPools {
         return Err("All pools empty. Something's wrong!".to_string());
         
     }
-    fn get_difficulty_of_pool(&self, pool: &Vec<Vec<f32>>) -> Result<InputDifficulty, String> {
+    fn get_difficulty_of_pool(&self, pool: &Vec<Vec<i32>>) -> Result<InputDifficulty, String> {
         if pool == &self.easy { return Ok(InputDifficulty::Easy) }
         else if pool == &self.moderate {return Ok(InputDifficulty::Moderate)}
         else if pool == &self.hard { return Ok(InputDifficulty::Hard) }
@@ -169,29 +175,133 @@ enum OpType {
     Divide,
     None
 }
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
+struct SerializableFraction {
+    fraction: Fraction,
+}
+impl Serialize for SerializableFraction {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where 
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("SerializableFraction", 1)?;
+        state.serialize_field("fraction", &self.fraction.to_string()).expect(&format!("Serialization of fraction {:?} failed", self.fraction));
+        state.end()
+    }
+}
+impl<'de> Deserialize<'de> for SerializableFraction {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>, 
+    {
+        enum Field { Frac }
+        impl<'de> Deserialize<'de> for Field {
+            fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                struct FieldVisitor;
+                impl<'de> Visitor<'de> for FieldVisitor {
+                    type Value = Field;
+                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                        formatter.write_str("`fraction`")
+                    }
+                    fn visit_str<E>(self, value: &str) -> Result<Field, E>
+                    where
+                        E: de::Error,
+                    {
+                        match value {
+                            "fraction" => Ok(Field::Frac),
+                            _ => Err(de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(FieldVisitor)
+            }
+        }  
+        struct SerializableFractionVisitor;
+        impl<'de> Visitor<'de> for SerializableFractionVisitor {
+            type Value = SerializableFraction;
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct SerializableFraction")
+            }
+            fn visit_seq<V>(self, mut seq: V) -> Result<SerializableFraction, V::Error>
+            where
+                V: SeqAccess<'de>,
+            {
+                let frac = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                Ok(SerializableFraction{ fraction: Fraction::from_str(frac).expect(&format!("Unable to deserialize fraction {:?}", frac)) })
+            }
+            fn visit_map<V>(self, mut map: V) -> Result<SerializableFraction, V::Error>
+            where 
+                V: MapAccess<'de>,
+            {
+                let mut frac = None;
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Frac => {
+                            if frac.is_some() {
+                                return Err(de::Error::duplicate_field("fraction"));
+                            }
+                            frac = Some(map.next_value()?);
+                        }
+                    }
+                }
+                let frac = frac.ok_or_else(|| de::Error::missing_field("fraction"))?;
+                Ok(SerializableFraction{ fraction: Fraction::from_str(frac).expect(&format!("Unable to deserialize fraction {:?}", frac)) })
+            }
+        }
+        const FIELDS: &'static [&'static str] = &["fraction"];
+        deserializer.deserialize_struct("SerializableFraction", FIELDS, SerializableFractionVisitor)
+    }        
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct OperationMarker {
-    input_vector: Vec<f32>,
+    input_vector: Vec<SerializableFraction>,
     op_type: OpType,
 }
-#[derive(Serialize, Deserialize, Clone)]
-struct SerializableNode {
+impl OperationMarker {
+    fn input_vector_to_i32(&self) -> Result<Vec<i32>, String> {
+        let mut vec = Vec::new();
+        for v in self.input_vector.as_slice() {
+            let i = match Decimal::from_fraction(v.fraction).to_string().parse::<i32>() {
+                Ok(i) => i,
+                Err(_) => { return Err(format!("Could not convert input vector {:?} to vector of i32.", self.input_vector).to_string())}
+            };
+            vec.push(i);
+        }
+        return Ok(vec);
+    }
+    fn sum_input_vector(&self) -> Fraction {
+        let mut acc = Fraction::from(0);
+        if self.input_vector.len() <= 0 { return acc; };
+        let mut sum_queue: queues::Queue<Fraction> = queues::Queue::new();
+        for v in self.input_vector.as_slice() { sum_queue.add(v.fraction).expect(""); }
+        
+        while sum_queue.size() > 0 {
+            acc = acc+sum_queue.remove().expect("");
+        }
+        return acc;
+    }
+}
+#[derive(Clone, Serialize, Deserialize)]
+struct UnidirectionalNode {
     data: OperationMarker,
-    children: Vec<SerializableNode>
+    children: Vec<UnidirectionalNode>
 }
 struct InputRanking {
-    target: String,
+    target: Fraction,
     difficulty: InputDifficulty,
-    input: Vec<f32>
+    input: Vec<i32>
 }
 
-struct FloatingPointPair {
-    first: f32,
-    second: f32
+struct FractionalPair {
+    first: Fraction,
+    second: Fraction
 }
 #[derive(Debug)]
 struct FrequencyCounter {
-    map: HashMap<String, u32> //value to occurrences
+    map: HashMap<Fraction, u32> //value to occurrences
 }
 impl ops::Add<FrequencyCounter> for FrequencyCounter {
     type Output = FrequencyCounter;
@@ -207,7 +317,7 @@ impl ops::Add<FrequencyCounter> for FrequencyCounter {
                     }
                 },
                 None => {
-                    self.map.entry(k.to_string()).or_insert(other.map.get(k).expect("Something went horribly wrong.").clone());
+                    self.map.entry(*k).or_insert(other.map.get(k).expect("Something went horribly wrong.").clone());
                 }
             }
         }
@@ -252,14 +362,14 @@ fn get_random_viable_target(pool_map: &HashMap<String, DifficultyPools>, validat
     let mut idx = rand::random::<usize>()%keys.len();
     let local_keys = keys.clone();
     let mut k = local_keys.get(idx).expect("");
-    let mut k_as_f32: f32 = k.parse::<f32>().unwrap();
+    let mut k_as_f32: f32 = Decimal::from_str(k).unwrap().to_string().parse::<f32>().unwrap(); //there might be a more efficient way to do this
     match validator {
         Some(v_func) => {
             while v_func(k_as_f32) == false {
                 keys.remove(idx);
                 idx = rand::random::<usize>()%&keys.as_slice().len();
                 k = keys.get(idx).expect("");
-                k_as_f32 = k.parse::<f32>().unwrap();
+                k_as_f32 = Decimal::from_str(k).unwrap().to_string().parse::<f32>().unwrap();
             }
         },
         None => {}
@@ -275,7 +385,7 @@ fn populate_output_directory(min_val: i32, max_val: i32, combination_count: usiz
     write_to_file(INPUT_FILE_NAME, "Failed to create difficulty pools file!", serde_json::to_string(&input_ranking_map).expect("Something went wrong when trying to write difficulty pools file").as_bytes());
 }
 
-fn get_input_of_difficulty_for_target(pool_map: &HashMap<String, DifficultyPools>, target: &str, difficulty: InputDifficulty) -> Result<(Vec<f32>, usize, InputDifficulty), String> {
+fn get_input_of_difficulty_for_target(pool_map: &HashMap<String, DifficultyPools>, target: &str, difficulty: InputDifficulty) -> Result<(Vec<i32>, usize, InputDifficulty), String> {
     match pool_map.get(target) {
         Some(difficulty_pools) => {
             match difficulty_pools.get_closest_matching_populated_pool(difficulty) {
@@ -303,12 +413,12 @@ fn write_to_file(path: &str, err_msg: &str, contents: &[u8]) {
     }
 }
 
-fn rank_all_inputs(root_nodes: &Vec<SerializableNode>) -> HashMap<String, DifficultyPools> {
+fn rank_all_inputs(root_nodes: &Vec<UnidirectionalNode>) -> HashMap<String, DifficultyPools> {
     let mut ranked_inputs: HashMap<String, DifficultyPools> = HashMap::new();
     for r in root_nodes {
         let ranking = rank_input(r);
         for item in ranking {
-            let item_name = &item.target;
+            let item_name = &item.target.to_string();
             match ranked_inputs.get_mut(item_name) {
                 Some(pool) => {
                     insert_input_into_pool(&item, pool)
@@ -332,7 +442,7 @@ fn insert_input_into_pool(item: &InputRanking, pool: &mut DifficultyPools) {
     }
 }
 
-fn rank_input(input: &SerializableNode) -> Vec<InputRanking> {
+fn rank_input(input: &UnidirectionalNode) -> Vec<InputRanking> {
     let mut input_ranking = Vec::new();
     let leaf_value_map = count_leaf_instances_of(input);
     for k in leaf_value_map.map.keys() {
@@ -348,12 +458,12 @@ fn rank_input(input: &SerializableNode) -> Vec<InputRanking> {
         else if occurrences > 2 && occurrences <= 5 {
             difficulty = InputDifficulty::Moderate;
         }
-        input_ranking.push(InputRanking{target: k.clone(), difficulty: difficulty, input: input.data.input_vector.clone() })
+        input_ranking.push(InputRanking{target: k.clone(), difficulty: difficulty, input: input.data.input_vector_to_i32().expect("Input ranking failed.") })
     }
     return input_ranking;
 }
 
-fn get_pairs(input_vector: &Vec<f32>) -> Vec<FloatingPointPair> {
+fn get_pairs(input_vector: &Vec<SerializableFraction>) -> Vec<FractionalPair> {
     let mut index = 0;
     let mut vector = Vec::new();
     while index < input_vector.len()-1 {
@@ -362,7 +472,7 @@ fn get_pairs(input_vector: &Vec<f32>) -> Vec<FloatingPointPair> {
         while i < input_vector.len() {
             if i != index {
                 let second = input_vector.get(i).unwrap().clone();
-                vector.push(FloatingPointPair{ first: first, second: second });
+                vector.push(FractionalPair{ first: first.fraction, second: second.fraction });
             }
             i+=1;
         }
@@ -370,14 +480,14 @@ fn get_pairs(input_vector: &Vec<f32>) -> Vec<FloatingPointPair> {
     }
     return vector;
 }
-fn remove_pair(input_vector: &Vec<f32>, pair: FloatingPointPair) -> Vec<f32> {
+fn remove_pair(input_vector: &Vec<SerializableFraction>, pair: FractionalPair) -> Vec<SerializableFraction> {
     let mut vector = Vec::new();
     let mut values_to_remove = Vec::new();
     values_to_remove.push(pair.first);
     values_to_remove.push(pair.second);
     for &i in input_vector {
-        if check_value_in_vec(values_to_remove.clone(), i) {
-            values_to_remove.remove(values_to_remove.iter().position(|x| *x == i).unwrap());
+        if check_value_in_vec(values_to_remove.clone(), i.fraction) {
+            values_to_remove.remove(values_to_remove.iter().position(|x| *x == i.fraction).unwrap());
         }
         else {
             vector.push(i);
@@ -393,18 +503,17 @@ fn check_value_in_vec<T: Clone + PartialEq>(v: Vec<T>, val: T) -> bool {
     return found;
 }
 
-fn count_leaf_instances_of(node: &SerializableNode) -> FrequencyCounter {
+fn count_leaf_instances_of(node: &UnidirectionalNode) -> FrequencyCounter {
     let mut map = FrequencyCounter{ map: HashMap::new() };
     for c in node.children.clone() {
         if c.children.len() <= 0 {
-            let value: f32 = c.data.input_vector.iter().sum();
-            let value_str = value.to_string();
-            match map.map.get_mut(&value_str) {
+            let value = c.data.sum_input_vector();
+            match map.map.get_mut(&value) {
                 Some(entry) => {
                     *entry += 1;
                 },
                 None => {
-                    map.map.entry(value_str).or_insert(1);
+                    map.map.entry(value).or_insert(1);
                 }
             }
         }
@@ -416,39 +525,47 @@ fn count_leaf_instances_of(node: &SerializableNode) -> FrequencyCounter {
     return map;
 }
 
-fn generate_total_possibility_space(min_val: i32, max_val: i32, combination_count: usize) -> Vec<SerializableNode> {
+fn generate_total_possibility_space(min_val: i32, max_val: i32, combination_count: usize) -> Vec<UnidirectionalNode> {
     let combinations = (min_val..max_val).combinations_with_replacement(combination_count);
     let mut root_nodes = Vec::new();
     for c in combinations {
-        let input_vec: Vec<_> = c.iter().map(|i| *i as f32).collect();
+        let input_vec: Vec<_> = c.iter().map(|i| *i).collect();
         root_nodes.push(get_serializable_root_node(input_vec));
     }
     return root_nodes;
 }
 
-fn get_serializable_root_node(input_vector: Vec<f32>) -> SerializableNode {
+fn get_serializable_root_node(input_vector: Vec<i32>) -> UnidirectionalNode {
     let tree = generate_tree_for_input(input_vector);
     
     let root = tree.root().unwrap().data();
     let children = tree.root().unwrap().children();
     let mut child_vec = Vec::new();
     for c in children {
-        child_vec.push(SerializableNode{ data: c.data().clone(), children: Vec::new() });
+        child_vec.push(UnidirectionalNode{ data: c.data().clone(), children: Vec::new() });
     }
-    return SerializableNode{ data: root.clone(), children: convert_child_nodes_to_json(&tree, tree.root().unwrap().node_id()) };
+    return UnidirectionalNode{ data: root.clone(), children: convert_child_nodes_to_json(&tree, tree.root().unwrap().node_id()) };
 }
 
-fn convert_child_nodes_to_json(tree: &Box<Tree<OperationMarker>>, root_id: NodeId) -> Vec<SerializableNode> {
+fn convert_child_nodes_to_json(tree: &Box<Tree<OperationMarker>>, root_id: NodeId) -> Vec<UnidirectionalNode> {
     let children = tree.get(root_id).unwrap().children();
     let mut child_vec = Vec::new();
     for c in children {
-        child_vec.push(SerializableNode{ data: c.data().clone(), children: convert_child_nodes_to_json(tree, c.node_id()) });
+        child_vec.push(UnidirectionalNode{ data: c.data().clone(), children: convert_child_nodes_to_json(tree, c.node_id()) });
     }
     return child_vec;
 }
 
-fn generate_tree_for_input(input_vector: Vec<f32>) -> Box<Tree<OperationMarker>> {
-    let mut tree = Box::new(TreeBuilder::new().with_root(OperationMarker{ op_type: OpType::None, input_vector: input_vector.clone() } ).build());
+fn vec_i32_to_fraction(vector: Vec<i32>) -> Vec<SerializableFraction> {
+    let mut return_vec = Vec::new();
+    for v in vector {
+        return_vec.push(SerializableFraction { fraction: Fraction::from(v) });
+    }
+    return return_vec;
+}
+
+fn generate_tree_for_input(input_vector: Vec<i32>) -> Box<Tree<OperationMarker>> {
+    let mut tree = Box::new(TreeBuilder::new().with_root(OperationMarker{ op_type: OpType::None, input_vector: vec_i32_to_fraction(input_vector) } ).build());
     let root_id = tree.root_id().expect("root does not exist");
     let mut root = tree.get_mut(root_id).unwrap();
     let input_vector = root.data().input_vector.clone();
@@ -456,14 +573,14 @@ fn generate_tree_for_input(input_vector: Vec<f32>) -> Box<Tree<OperationMarker>>
     return tree;
 }
 
-fn generate_decision_tree(tree: &mut Tree<OperationMarker>, node_id: NodeId, input_vector: &Vec<f32>) {
+fn generate_decision_tree(tree: &mut Tree<OperationMarker>, node_id: NodeId, input_vector: &Vec<SerializableFraction>) {
     let pairs = get_pairs(&input_vector);
     for p in pairs {
         compute_operations(tree, node_id, p.first, p.second, remove_pair(&input_vector, p));
     }
 }
 
-fn compute_operations(tree: &mut Tree<OperationMarker>, node_id: NodeId, first_input: f32, second_input: f32, remaining_inputs: Vec<f32>) {
+fn compute_operations(tree: &mut Tree<OperationMarker>, node_id: NodeId, first_input: Fraction, second_input: Fraction, remaining_inputs: Vec<SerializableFraction>) {
     let mut vector = Vec::new();
     vector.push(compute_single_op(tree, node_id, first_input, second_input, remaining_inputs.clone(), compute_plus, OpType::Plus));
     vector.push(compute_single_op(tree, node_id, first_input, second_input, remaining_inputs.clone(), compute_minus, OpType::Minus));
@@ -475,8 +592,8 @@ fn compute_operations(tree: &mut Tree<OperationMarker>, node_id: NodeId, first_i
         }
     }
 }
-type Operation = fn(f32, f32) -> f32;
-fn compute_single_op<'a>(tree: &'a mut Tree<OperationMarker>, node_id: NodeId, first_input: f32, second_input: f32, remaining_inputs: Vec<f32>, op_function: Operation, op_type: OpType) -> (NodeId, Vec<f32>) {
+type Operation = fn(Fraction, Fraction) -> SerializableFraction;
+fn compute_single_op<'a>(tree: &'a mut Tree<OperationMarker>, node_id: NodeId, first_input: Fraction, second_input: Fraction, remaining_inputs: Vec<SerializableFraction>, op_function: Operation, op_type: OpType) -> (NodeId, Vec<SerializableFraction>) {
     let mut vector = Vec::new();
     let mut node = tree.get_mut(node_id).unwrap();
     let mut r = remaining_inputs;
@@ -486,17 +603,17 @@ fn compute_single_op<'a>(tree: &'a mut Tree<OperationMarker>, node_id: NodeId, f
     return (child.node_id(), child.data().input_vector.clone());
 }
 
-fn compute_plus(first_input: f32, second_input: f32) -> f32 {
-    return first_input+second_input;
+fn compute_plus(first_input: Fraction, second_input: Fraction) -> SerializableFraction {
+    SerializableFraction{ fraction: first_input+second_input }
 }
-fn compute_minus(first_input: f32, second_input: f32) -> f32 {
-    return first_input-second_input;
+fn compute_minus(first_input: Fraction, second_input: Fraction) -> SerializableFraction {
+    SerializableFraction{ fraction: first_input-second_input }
 }
-fn compute_times(first_input: f32, second_input: f32) ->  f32 {
-    return first_input*second_input;
+fn compute_times(first_input: Fraction, second_input: Fraction) ->  SerializableFraction {
+    SerializableFraction{ fraction: first_input*second_input }
 }
-fn compute_divided_by(first_input: f32, second_input: f32) -> f32 {
-    return first_input/second_input;
+fn compute_divided_by(first_input: Fraction, second_input: Fraction) -> SerializableFraction {
+    SerializableFraction{ fraction: first_input/second_input }
 }
 
 /* #endregion */
