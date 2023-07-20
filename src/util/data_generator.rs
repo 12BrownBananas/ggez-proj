@@ -306,18 +306,13 @@ struct FrequencyCounter {
 impl ops::Add<FrequencyCounter> for FrequencyCounter {
     type Output = FrequencyCounter;
     fn add(mut self, other: FrequencyCounter) -> FrequencyCounter {
-        for k in other.map.keys() {
+        for (k, v) in other.map.iter() {
             match self.map.get_mut(k) {
                 Some(entry) => {
-                    match other.map.get(k) {
-                        Some(other_entry) => {
-                            *entry += *other_entry;
-                        },
-                        None => {}
-                    }
+                    *entry += *v;
                 },
                 None => {
-                    self.map.entry(*k).or_insert(other.map.get(k).expect("Something went horribly wrong.").clone());
+                    self.map.entry(*k).or_insert(v.clone());
                 }
             }
         }
@@ -340,8 +335,7 @@ fn difficulty_to_string(rating: InputDifficulty) -> String {
 }
 fn remove_inputs_without_matching_difficulties(pool_map: HashMap<String, DifficultyPools>, valid_difficulties: &Vec<InputDifficulty>) -> HashMap<String, DifficultyPools> {
     let mut new_pool_map = HashMap::new();
-    for k in pool_map.keys() {
-        let v: &DifficultyPools = pool_map.get(k).expect("");
+    for (k, v) in pool_map.iter() {
         let mut add = false;
         for diff in valid_difficulties {
             match diff {
@@ -445,8 +439,7 @@ fn insert_input_into_pool(item: &InputRanking, pool: &mut DifficultyPools) {
 fn rank_input(input: &UnidirectionalNode) -> Vec<InputRanking> {
     let mut input_ranking = Vec::new();
     let leaf_value_map = count_leaf_instances_of(input);
-    for k in leaf_value_map.map.keys() {
-        let &occurrences = leaf_value_map.map.get(k).expect("");
+    for (k, &occurrences) in leaf_value_map.map.iter() {
         let mut difficulty = InputDifficulty::Easy;
         /* Note: Arbitrary values incoming */
         //Between 0 and 2 paths: "Hard" input
