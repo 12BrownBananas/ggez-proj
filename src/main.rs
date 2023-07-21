@@ -55,7 +55,7 @@ impl GameState {
         return format!("{}{}", delta_time_string, delta_time_string_suffix);
     }
     fn sort_objects_by_depth(&mut self) {
-        //eventually, this will order self.objects according to depth
+        self.objects.sort_unstable_by(|a, b| a.get_depth().cmp(&b.get_depth()));        
     }
     fn add_object(&mut self, obj: Box<dyn game_object::GameObject>) -> &Box<dyn game_object::GameObject> {
         let idx = self.objects.len();
