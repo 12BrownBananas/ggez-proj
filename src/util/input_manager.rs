@@ -7,7 +7,15 @@ pub enum InputSemantic {
     Left,
     Right,
     Accept,
-    Back
+    Back,
+    Plus,
+    Minus,
+    Multiply,
+    Divide,
+    Hotbar1,
+    Hotbar2,
+    Hotbar3,
+    Hotbar4,
 }
 
 #[derive(Eq, PartialEq, Clone, Copy)]

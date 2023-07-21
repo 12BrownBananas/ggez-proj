@@ -29,7 +29,7 @@ impl GameState {
             dt_format: DeltaTimeFormat::Nanos,
             dt_text_display: Text::new(""),
             display_dt: true,
-            input_manager: util::input_manager::InputManager::new()
+            input_manager: get_any4_input_manager()
         }
     }
     pub fn get_dt_string(&self) -> String {
@@ -139,29 +139,7 @@ impl ggez::event::EventHandler<GameError> for GameState {
 
 
 fn main() {
-    let mut state  = GameState::new();
-
-    /* Control initialization */
-    //Accept
-    let accept_key = Box::new(input_manager::KeyboardInputProcessor::new(vec!(ggez::input::keyboard::KeyCode::Return, ggez::input::keyboard::KeyCode::Space, ggez::input::keyboard::KeyCode::NumpadEnter)));
-    state.get_input_manager().register_input(input_manager::InputSemantic::Accept, accept_key);
-    let accept_mouse_button = Box::new(input_manager::MouseInputProcessor::new(vec!(ggez::input::mouse::MouseButton::Left)));
-    state.get_input_manager().register_input(input_manager::InputSemantic::Accept, accept_mouse_button);
-    //Back
-    let back_key = Box::new(input_manager::KeyboardInputProcessor::new(vec!(ggez::input::keyboard::KeyCode::Back)));
-    state.get_input_manager().register_input(input_manager::InputSemantic::Back, back_key);
-    let back_mouse_button = Box::new(input_manager::MouseInputProcessor::new(vec!(ggez::input::mouse::MouseButton::Right)));
-    state.get_input_manager().register_input(input_manager::InputSemantic::Back, back_mouse_button);
-    //Directional input
-    let up_key = Box::new(input_manager::KeyboardInputProcessor::new(vec!(ggez::input::keyboard::KeyCode::W, ggez::input::keyboard::KeyCode::Up)));
-    state.get_input_manager().register_input(input_manager::InputSemantic::Up, up_key);
-    let down_key = Box::new(input_manager::KeyboardInputProcessor::new(vec!(ggez::input::keyboard::KeyCode::S, ggez::input::keyboard::KeyCode::Down)));
-    state.get_input_manager().register_input(input_manager::InputSemantic::Down, down_key);
-    let left_key = Box::new(input_manager::KeyboardInputProcessor::new(vec!(ggez::input::keyboard::KeyCode::A, ggez::input::keyboard::KeyCode::Left)));
-    state.get_input_manager().register_input(input_manager::InputSemantic::Left, left_key);
-    let right_key = Box::new(input_manager::KeyboardInputProcessor::new(vec!(ggez::input::keyboard::KeyCode::D, ggez::input::keyboard::KeyCode::Right)));
-    state.get_input_manager().register_input(input_manager::InputSemantic::Right, right_key);
-
+    let state  = GameState::new();
     data_generator::init(1, 10, 4, false);
     let config = data_generator::SetConfig::new(10, None, Some(data_generator::value_is_positive_integer), vec!(data_generator::InputDifficulty::Easy, data_generator::InputDifficulty::Moderate, data_generator::InputDifficulty::Hard));
     
@@ -191,4 +169,149 @@ fn main() {
         .unwrap();
 
     event::run(ctx, event_loop, state);
+}
+
+fn get_any4_input_manager() -> input_manager::InputManager {
+    let mut manager = util::input_manager::InputManager::new();
+    /* Control initialization */
+    //Accept
+    manager.register_input(
+        input_manager::InputSemantic::Accept, 
+        Box::new(input_manager::KeyboardInputProcessor::new(
+            vec!(
+                ggez::input::keyboard::KeyCode::Return, 
+                ggez::input::keyboard::KeyCode::Space, 
+                ggez::input::keyboard::KeyCode::NumpadEnter
+            )
+        ))
+    );
+    manager.register_input(
+        input_manager::InputSemantic::Accept, 
+        Box::new(input_manager::MouseInputProcessor::new(
+            vec!(ggez::input::mouse::MouseButton::Left)
+        ))
+    );
+    //Back
+    manager.register_input(
+        input_manager::InputSemantic::Back, 
+        Box::new(input_manager::KeyboardInputProcessor::new(
+            vec!(ggez::input::keyboard::KeyCode::Back)
+        ))
+    );
+    manager.register_input(
+        input_manager::InputSemantic::Back, 
+        Box::new(input_manager::MouseInputProcessor::new(
+            vec!(ggez::input::mouse::MouseButton::Right)
+        ))
+    );
+    //Directional input
+    manager.register_input(
+        input_manager::InputSemantic::Up, 
+        Box::new(input_manager::KeyboardInputProcessor::new(
+            vec!(
+                ggez::input::keyboard::KeyCode::W, 
+                ggez::input::keyboard::KeyCode::Up
+            )
+        ))
+    );
+    manager.register_input(
+        input_manager::InputSemantic::Down, 
+        Box::new(input_manager::KeyboardInputProcessor::new(
+            vec!(
+                ggez::input::keyboard::KeyCode::S, 
+                ggez::input::keyboard::KeyCode::Down
+            )
+        ))
+    );
+    manager.register_input(
+        input_manager::InputSemantic::Left, 
+        Box::new(input_manager::KeyboardInputProcessor::new(
+            vec!(
+                ggez::input::keyboard::KeyCode::A, 
+                ggez::input::keyboard::KeyCode::Left
+            )
+        ))
+    );
+    manager.register_input(
+        input_manager::InputSemantic::Right, 
+        Box::new(input_manager::KeyboardInputProcessor::new(
+            vec!(
+                ggez::input::keyboard::KeyCode::D, 
+                ggez::input::keyboard::KeyCode::Right
+            )
+        ))
+    );
+    //Hotkeys
+    manager.register_input(
+        input_manager::InputSemantic::Plus, 
+        Box::new(input_manager::KeyboardInputProcessor::new(
+            vec!(
+                ggez::input::keyboard::KeyCode::Plus
+            )
+        ))
+    );
+    manager.register_input(
+        input_manager::InputSemantic::Minus, 
+        Box::new(input_manager::KeyboardInputProcessor::new(
+            vec!(
+                ggez::input::keyboard::KeyCode::Minus
+            )
+        ))
+    );
+    manager.register_input(
+        input_manager::InputSemantic::Multiply,
+        Box::new(input_manager::KeyboardInputProcessor::new(
+            vec!(
+                ggez::input::keyboard::KeyCode::X,
+                ggez::input::keyboard::KeyCode::Asterisk,
+                ggez::input::keyboard::KeyCode::NumpadMultiply
+            )
+        ))
+    );
+    manager.register_input(
+        input_manager::InputSemantic::Divide, 
+        Box::new(input_manager::KeyboardInputProcessor::new(
+            vec!(
+                ggez::input::keyboard::KeyCode::Slash,
+                ggez::input::keyboard::KeyCode::NumpadDivide
+            )
+        ))
+    );
+    manager.register_input(
+        input_manager::InputSemantic::Hotbar1,
+        Box::new(input_manager::KeyboardInputProcessor::new(
+            vec!(
+                ggez::input::keyboard::KeyCode::Numpad1,
+                ggez::input::keyboard::KeyCode::Key1
+            )
+        ))
+    );
+    manager.register_input(
+        input_manager::InputSemantic::Hotbar2,
+        Box::new(input_manager::KeyboardInputProcessor::new(
+            vec!(
+                ggez::input::keyboard::KeyCode::Numpad2,
+                ggez::input::keyboard::KeyCode::Key2
+            )
+        ))
+    );
+    manager.register_input(
+        input_manager::InputSemantic::Hotbar3,
+        Box::new(input_manager::KeyboardInputProcessor::new(
+            vec!(
+                ggez::input::keyboard::KeyCode::Numpad3,
+                ggez::input::keyboard::KeyCode::Key3
+            )
+        ))
+    );
+    manager.register_input(
+        input_manager::InputSemantic::Hotbar4,
+        Box::new(input_manager::KeyboardInputProcessor::new(
+            vec!(
+                ggez::input::keyboard::KeyCode::Numpad4,
+                ggez::input::keyboard::KeyCode::Key4
+            )
+        ))
+    );
+    return manager;
 }
