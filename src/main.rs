@@ -1,4 +1,7 @@
 mod util;
+mod components;
+
+use std::ptr::eq;
 
 use ggez::*;
 use ggez::conf::{WindowMode, WindowSetup};
@@ -7,6 +10,8 @@ use ggez::input::keyboard::{KeyCode, KeyInput};
 
 use util::input_manager;
 use util::data_generator;
+
+use components::game_object;
 
 enum DeltaTimeFormat {
     Nanos,
@@ -21,6 +26,7 @@ struct GameState {
     dt_text_display: Text,
     display_dt: bool,
     input_manager: util::input_manager::InputManager,
+    objects: Vec<Box<dyn game_object::GameObject>>
 }
 impl GameState {
     fn new() -> GameState {
@@ -29,7 +35,8 @@ impl GameState {
             dt_format: DeltaTimeFormat::Nanos,
             dt_text_display: Text::new(""),
             display_dt: true,
-            input_manager: get_any4_input_manager()
+            input_manager: get_any4_input_manager(),
+            objects: Vec::new()
         }
     }
     pub fn get_dt_string(&self) -> String {
@@ -47,8 +54,22 @@ impl GameState {
         };
         return format!("{}{}", delta_time_string, delta_time_string_suffix);
     }
-    fn get_input_manager(&mut self) -> &mut input_manager::InputManager {
-        &mut self.input_manager
+    fn sort_objects_by_depth(&mut self) {
+        //eventually, this will order self.objects according to depth
+    }
+    fn add_object(&mut self, obj: Box<dyn game_object::GameObject>) -> &Box<dyn game_object::GameObject> {
+        let idx = self.objects.len();
+        self.objects.push(obj);
+        return self.objects.get(idx).unwrap();
+    }
+    fn remove_object(&mut self, obj: &Box<dyn game_object::GameObject>) {
+        let index = self.objects.iter().position(|x| eq(x, obj));
+        match index {
+            Some(idx) => { 
+                self.objects.remove(idx);
+            },
+            None => {}
+        }
     }
 }
 impl ggez::event::EventHandler<GameError> for GameState {
@@ -56,15 +77,12 @@ impl ggez::event::EventHandler<GameError> for GameState {
         const DESIRED_FPS: u32 = 60;
         while ctx.time.check_update_time(DESIRED_FPS) {}
         self.dt = ctx.time.delta();
-        /* You can check the input status from anywhere like this, not just the update loop */
-        if self.input_manager.get_input_state(input_manager::InputSemantic::Accept) == input_manager::InputState::Pressed { println!("Accept Pressed") }
-        if self.input_manager.get_input_state(input_manager::InputSemantic::Back) == input_manager::InputState::Pressed { println!("Back Pressed") }
-        if self.input_manager.get_input_state(input_manager::InputSemantic::Up) == input_manager::InputState::Pressed { println!("Up Pressed") }
-        if self.input_manager.get_input_state(input_manager::InputSemantic::Down) == input_manager::InputState::Pressed { println!("Down Pressed") }
-        if self.input_manager.get_input_state(input_manager::InputSemantic::Left) == input_manager::InputState::Pressed { println!("Left Pressed") }
-        if self.input_manager.get_input_state(input_manager::InputSemantic::Right) == input_manager::InputState::Pressed { println!("Right Pressed") }
-        self.input_manager.process_input();
 
+        for o in self.objects.as_mut_slice() {
+            o.process_input(&self.input_manager);
+            o.update();
+        }
+        self.input_manager.process_input();
         Ok(())
     }
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
@@ -73,6 +91,10 @@ impl ggez::event::EventHandler<GameError> for GameState {
             self.dt_text_display.clear();
             self.dt_text_display.add(self.get_dt_string());
             canvas.draw(&self.dt_text_display, graphics::DrawParam::from([200.0, 0.0]).color(Color::WHITE),);
+        }
+        self.sort_objects_by_depth();
+        for o in self.objects.as_mut_slice() {
+            o.draw();
         }
 
         canvas.finish(ctx)?;
@@ -139,7 +161,7 @@ impl ggez::event::EventHandler<GameError> for GameState {
 
 
 fn main() {
-    let state  = GameState::new();
+    let mut state  = GameState::new();
     data_generator::init(1, 10, 4, false);
     let config = data_generator::SetConfig::new(10, None, Some(data_generator::value_is_positive_integer), vec!(data_generator::InputDifficulty::Easy, data_generator::InputDifficulty::Moderate, data_generator::InputDifficulty::Hard));
     
@@ -156,6 +178,7 @@ fn main() {
         },
         Err(e) => {println!("{}", e)}
     }
+    state.add_object(Box::new(game_object::BoardContainer{}));
 
     /* Main game loop */
     let (ctx, event_loop) = ContextBuilder::new("any4", "Act-Novel")
@@ -209,7 +232,7 @@ fn get_any4_input_manager() -> input_manager::InputManager {
         input_manager::InputSemantic::Up, 
         Box::new(input_manager::KeyboardInputProcessor::new(
             vec!(
-                ggez::input::keyboard::KeyCode::W, 
+                ggez::input::keyboard::KeyCode::W,
                 ggez::input::keyboard::KeyCode::Up
             )
         ))
