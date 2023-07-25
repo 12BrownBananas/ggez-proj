@@ -81,7 +81,7 @@ impl ggez::event::EventHandler<GameError> for GameState {
 
         for o in self.objects.as_mut_slice() {
             o.process_input(&self.input_manager);
-            o.update(ctx);
+            o.update();
         }
         self.input_manager.process_input();
         Ok(())
