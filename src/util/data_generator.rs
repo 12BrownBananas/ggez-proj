@@ -19,6 +19,15 @@ const INPUT_FILE_NAME: &str = "rsc/data/difficulty_pools.json";
 const DATA_FILES_LIST: &'static [&'static str] = &[INPUT_FILE_NAME];
 
 /* #region Public Interface */
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub enum OpType {
+    Plus,
+    Minus,
+    Multiply,
+    Divide,
+    None
+}
+
 pub type TargetValidatorFunc = fn(f32) -> bool;
 pub struct SetConfig {
     size: usize,
@@ -166,15 +175,6 @@ pub fn get_set_of_inputs(mut pool_map: HashMap<String, DifficultyPools>, config:
 /* #endregion */
 
 /* #region Secret Inner-Workings */
-
-#[derive(Deserialize, Serialize, Clone, Debug)]
-enum OpType {
-    Plus,
-    Minus,
-    Multiply,
-    Divide,
-    None
-}
 #[derive(Debug, Clone, Copy)]
 struct SerializableFraction {
     fraction: Fraction,

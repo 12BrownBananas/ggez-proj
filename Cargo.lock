@@ -828,6 +828,7 @@ dependencies = [
  "fraction",
  "ggez",
  "itertools",
+ "keyframe",
  "log",
  "queues",
  "rand",
@@ -1190,6 +1191,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5f195fe497f702db0f318b07fdd68edb16955aed830df8363d837542f8f935a"
 dependencies = [
  "wasm-bindgen",
+]
+
+[[package]]
+name = "keyframe"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60708bf7981518d09095d6f5673ce5cf6a64f1e0d9708b554f670e6d9d2bd9a9"
+dependencies = [
+ "mint",
+ "num-traits",
 ]
 
 [[package]]

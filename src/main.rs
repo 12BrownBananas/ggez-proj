@@ -12,6 +12,7 @@ use util::input_manager;
 use util::data_generator;
 
 use components::game_object;
+use fraction::Fraction;
 
 enum DeltaTimeFormat {
     Nanos,
@@ -94,7 +95,7 @@ impl ggez::event::EventHandler<GameError> for GameState {
         }
         self.sort_objects_by_depth();
         for o in self.objects.as_mut_slice() {
-            o.draw();
+            o.draw(&mut canvas);
         }
 
         canvas.finish(ctx)?;
@@ -171,8 +172,14 @@ fn main() {
     match res {
         Ok(set) => {
             println!("Generated set of boards: {{");
+            let mut xpos = 0.0;
+            let ypos = 10.0;
             for board in set {
-                println!("   {:?}", board.get_board_info())
+                println!("   {:?}", board.get_board_info());
+                for b in board.input {
+                    state.add_object(Box::new(game_object::VisibleNumber::new(Fraction::from(b), xpos, ypos, 0, Color::WHITE))); //just for example
+                    xpos+=20.0;
+                }
             }
             println!("}}");
         },
