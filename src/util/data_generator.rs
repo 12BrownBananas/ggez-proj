@@ -50,7 +50,7 @@ impl SetConfig {
         }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Board {
     pub input: Vec<i32>,
     pub target: Fraction,

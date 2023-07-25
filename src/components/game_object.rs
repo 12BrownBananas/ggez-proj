@@ -1,7 +1,9 @@
 use crate::util::input_manager::{InputSemantic, InputState, InputManager};
-use crate::util::data_generator::OpType;
+use crate::util::data_generator::{self, OpType, DifficultyPools, SetConfig, Board};
 use fraction::Fraction;
 use ggez::graphics::{self, Text, Drawable, Canvas, Color};
+use std::collections::HashMap;
+use queues::*;
 
 pub trait GameObject {
     fn process_input(&mut self, _input_manager: &InputManager) {}
@@ -16,7 +18,43 @@ pub struct Transform {
     depth: i32
 }
 
-pub struct BoardContainer {}
+pub struct BoardContainer {
+    pool_map: HashMap<String, DifficultyPools>,
+    config: SetConfig,
+    sequence: Option<Queue<Board>>
+}
+impl BoardContainer {
+    pub fn new(pool_map: HashMap<String, DifficultyPools>, config: SetConfig) -> BoardContainer {
+        BoardContainer {
+            pool_map,
+            config,
+            sequence: None
+        }
+    }
+    pub fn generate_new_board_sequence(&mut self) {
+        match data_generator::get_set_of_inputs(self.pool_map.clone(), &self.config) {
+            Ok(res) => {
+                let mut q = Queue::new();
+                for board in res {
+                    q.add(board).expect("Unable to add board to queue (in BoardContainer)");
+                }
+                self.sequence = Some(q);
+            },
+            Err(_) => {}
+        }
+    }
+    pub fn get_next_board(&mut self) -> Option<Board> {
+        match self.sequence.as_mut() {
+            Some(seq) => {
+                match seq.remove() {
+                    Ok(b) => {Some(b)},
+                    Err(_) => None
+                }
+            }
+            None => None
+        }
+    }
+}
 impl GameObject for BoardContainer {
     fn process_input(&mut self, _input_manager: &InputManager) {
         if _input_manager.get_input_state(InputSemantic::Accept) == InputState::Pressed {

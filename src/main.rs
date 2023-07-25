@@ -185,7 +185,7 @@ fn main() {
         },
         Err(e) => {println!("{}", e)}
     }
-    state.add_object(Box::new(game_object::BoardContainer{}));
+    state.add_object(Box::new(game_object::BoardContainer::new(pool_map, config)));
 
     /* Main game loop */
     let (ctx, event_loop) = ContextBuilder::new("any4", "Act-Novel")
