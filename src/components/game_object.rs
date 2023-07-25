@@ -1,6 +1,7 @@
 use crate::util::input_manager::{InputSemantic, InputState, InputManager};
 use crate::util::data_generator::{self, OpType, DifficultyPools, SetConfig, Board};
 use fraction::Fraction;
+use ggez::Context;
 use ggez::graphics::{self, Text, Drawable, Canvas, Color};
 use std::collections::HashMap;
 use queues::*;
@@ -48,13 +49,33 @@ impl BoardContainer {
         }
     }
 }
-impl GameObject for BoardContainer {
-    fn process_input(&mut self, _input_manager: &InputManager) {
-        if _input_manager.get_input_state(InputSemantic::Accept) == InputState::Pressed {
-            println!("Accept pressed! (From inside of BoardContainer)")
+
+pub struct GameController {
+    board: BoardContainer,
+    seq_initialized: bool
+}
+impl GameController {
+    pub fn new(board: BoardContainer) -> GameController {
+        GameController {
+            board,
+            seq_initialized: false
         }
     }
-    fn get_depth(&self) -> i32 {return 0;}
+}
+impl GameObject for GameController {
+    fn update(&mut self) {
+        if !self.seq_initialized {
+            self.board.generate_new_board_sequence();
+
+            self.seq_initialized = true;
+        }
+    }
+    fn get_depth(&self) -> i32 { return 0; }
+    fn process_input(&mut self, _input_manager: &InputManager) {
+        if _input_manager.get_input_state(InputSemantic::Accept) == InputState::Pressed {
+            println!("Accept pressed! (From inside of GameController)")
+        }
+    }
 }
 
 pub struct RenderText {

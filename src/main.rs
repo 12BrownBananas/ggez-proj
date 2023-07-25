@@ -27,7 +27,7 @@ struct GameState {
     dt_text_display: Text,
     display_dt: bool,
     input_manager: util::input_manager::InputManager,
-    objects: Vec<Box<dyn game_object::GameObject>>
+    objects: Vec<Box<dyn game_object::GameObject>>,
 }
 impl GameState {
     fn new() -> GameState {
@@ -37,7 +37,7 @@ impl GameState {
             dt_text_display: Text::new(""),
             display_dt: true,
             input_manager: get_any4_input_manager(),
-            objects: Vec::new()
+            objects: Vec::new(),
         }
     }
     pub fn get_dt_string(&self) -> String {
@@ -81,7 +81,7 @@ impl ggez::event::EventHandler<GameError> for GameState {
 
         for o in self.objects.as_mut_slice() {
             o.process_input(&self.input_manager);
-            o.update();
+            o.update(ctx);
         }
         self.input_manager.process_input();
         Ok(())
@@ -185,7 +185,7 @@ fn main() {
         },
         Err(e) => {println!("{}", e)}
     }
-    state.add_object(Box::new(game_object::BoardContainer::new(pool_map, config)));
+    state.add_object(Box::new(game_object::GameController::new(game_object::BoardContainer::new(pool_map, config))));
 
     /* Main game loop */
     let (ctx, event_loop) = ContextBuilder::new("any4", "Act-Novel")
