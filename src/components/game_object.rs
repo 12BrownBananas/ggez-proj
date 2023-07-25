@@ -21,37 +21,30 @@ pub struct Transform {
 pub struct BoardContainer {
     pool_map: HashMap<String, DifficultyPools>,
     config: SetConfig,
-    sequence: Option<Queue<Board>>
+    sequence: Queue<Board>
 }
 impl BoardContainer {
     pub fn new(pool_map: HashMap<String, DifficultyPools>, config: SetConfig) -> BoardContainer {
         BoardContainer {
             pool_map,
             config,
-            sequence: None
+            sequence: Queue::new()
         }
     }
     pub fn generate_new_board_sequence(&mut self) {
         match data_generator::get_set_of_inputs(self.pool_map.clone(), &self.config) {
             Ok(res) => {
-                let mut q = Queue::new();
                 for board in res {
-                    q.add(board).expect("Unable to add board to queue (in BoardContainer)");
+                    self.sequence.add(board).expect("Unable to add board to queue (in BoardContainer)");
                 }
-                self.sequence = Some(q);
             },
             Err(_) => {}
         }
     }
     pub fn get_next_board(&mut self) -> Option<Board> {
-        match self.sequence.as_mut() {
-            Some(seq) => {
-                match seq.remove() {
-                    Ok(b) => {Some(b)},
-                    Err(_) => None
-                }
-            }
-            None => None
+        match self.sequence.remove() {
+            Ok(b) => {Some(b)},
+            Err(_) => None
         }
     }
 }
