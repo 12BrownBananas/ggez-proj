@@ -1,16 +1,30 @@
 use crate::util::input_manager::{InputSemantic, InputState, InputManager};
 use crate::util::data_generator::{self, OpType, DifficultyPools, SetConfig, Board};
 use fraction::Fraction;
-use ggez::Context;
 use ggez::graphics::{self, Text, Drawable, Canvas, Color};
 use std::collections::HashMap;
 use queues::*;
 
-pub trait GameObject {
-    fn process_input(&mut self, _input_manager: &InputManager) {}
+pub trait GameObject: AsGameObject {
     fn draw(&mut self, _canvas: &mut Canvas) {}
     fn get_depth(&self) -> i32;
     fn update(&mut self) {}
+}
+pub trait ControllableGameObject : GameObject {
+    fn process_input(&mut self, _input_manager: &InputManager) {}
+}
+
+pub trait AsGameObject {
+    fn as_game_object(&self) -> &dyn GameObject;
+    fn as_mut_game_object(&mut self) -> &mut dyn GameObject;
+}
+impl <T: GameObject> AsGameObject for T {
+    fn as_game_object(&self) -> &dyn GameObject {
+        self
+    }
+    fn as_mut_game_object(&mut self) -> &mut dyn GameObject {
+        self
+    }
 }
 
 pub struct Transform {
@@ -71,6 +85,8 @@ impl GameObject for GameController {
         }
     }
     fn get_depth(&self) -> i32 { return 0; }
+}
+impl ControllableGameObject for GameController {
     fn process_input(&mut self, _input_manager: &InputManager) {
         if _input_manager.get_input_state(InputSemantic::Accept) == InputState::Pressed {
             println!("Accept pressed! (From inside of GameController)")

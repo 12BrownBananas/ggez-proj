@@ -5,8 +5,8 @@ use std::ptr::eq;
 
 use ggez::*;
 use ggez::conf::{WindowMode, WindowSetup};
-use ggez::graphics::{Color, Text};
-use ggez::input::keyboard::{KeyCode, KeyInput};
+use ggez::graphics::{Canvas, Color};
+use ggez::input::keyboard::KeyInput;
 
 use util::input_manager;
 use util::data_generator;
@@ -14,49 +14,57 @@ use util::data_generator;
 use components::game_object;
 use fraction::Fraction;
 
-enum DeltaTimeFormat {
-    Nanos,
-    Micros,
-    Millis,
-    Secs
+enum ObjectGroup {
+    Controllable,
+    General
+}
+struct RenderInstruction {
+    group: ObjectGroup,
+    index: usize,
+    depth: i32
 }
 
 struct GameState {
-    dt: std::time::Duration,
-    dt_format: DeltaTimeFormat,
-    dt_text_display: Text,
-    display_dt: bool,
     input_manager: util::input_manager::InputManager,
     objects: Vec<Box<dyn game_object::GameObject>>,
+    controllables: Vec<Box<dyn game_object::ControllableGameObject>>
 }
 impl GameState {
     fn new() -> GameState {
         GameState {
-            dt: std::time::Duration::new(0, 0),
-            dt_format: DeltaTimeFormat::Nanos,
-            dt_text_display: Text::new(""),
-            display_dt: true,
             input_manager: get_any4_input_manager(),
             objects: Vec::new(),
+            controllables: Vec::new()
         }
     }
-    pub fn get_dt_string(&self) -> String {
-        let delta_time_string = match self.dt_format {
-            DeltaTimeFormat::Micros => self.dt.as_micros(),
-            DeltaTimeFormat::Millis => self.dt.as_millis(),
-            DeltaTimeFormat::Nanos => self.dt.as_nanos(),
-            DeltaTimeFormat::Secs => self.dt.as_secs().into(),
-        };
-        let delta_time_string_suffix = match self.dt_format {
-            DeltaTimeFormat::Micros => "µs",
-            DeltaTimeFormat::Millis => "ms",
-            DeltaTimeFormat::Nanos => "ns",
-            DeltaTimeFormat::Secs => "s",
-        };
-        return format!("{}{}", delta_time_string, delta_time_string_suffix);
+    fn collect_render_instructions(&self) -> Vec<RenderInstruction> {
+        let mut instructions = Vec::new();
+        let mut i: usize = 0;
+        while i < self.objects.len() {
+            let o = self.objects.get(i).expect("");
+            instructions.push(RenderInstruction { group: ObjectGroup::General, index: i, depth:  o.get_depth() });
+            i+=1;
+        }
+        let mut i: usize = 0;
+        while i < self.controllables.len() {
+            let o = self.controllables.get(i).expect("");
+            instructions.push(RenderInstruction { group: ObjectGroup::Controllable, index: i, depth: o.get_depth() });
+            i+=1;
+        }
+        instructions.sort_unstable_by(|a, b| a.depth.cmp(&b.depth));
+        return instructions;
     }
-    fn sort_objects_by_depth(&mut self) {
-        self.objects.sort_unstable_by(|a, b| a.get_depth().cmp(&b.get_depth()));        
+    fn process_render_instruction(&mut self, instruction: RenderInstruction, canvas: &mut Canvas) {
+        match instruction.group {
+            ObjectGroup::Controllable => {
+                let o = self.controllables.get_mut(instruction.index).expect("");
+                o.draw(canvas);
+            },
+            ObjectGroup::General => {
+                let o = self.objects.get_mut(instruction.index).expect("");
+                o.draw(canvas);
+            }
+        }
     }
     fn add_object(&mut self, obj: Box<dyn game_object::GameObject>) -> &Box<dyn game_object::GameObject> {
         let idx = self.objects.len();
@@ -72,15 +80,30 @@ impl GameState {
             None => {}
         }
     }
+    fn add_controllable(&mut self, obj: Box<dyn game_object::ControllableGameObject>) -> &Box<dyn game_object::ControllableGameObject> {
+        let idx = self.controllables.len();
+        self.controllables.push(obj);
+        return self.controllables.get(idx).unwrap();
+    }
+    fn remove_controllable(&mut self, obj: &Box<dyn game_object::ControllableGameObject>) {
+        let index = self.controllables.iter().position(|x| eq(x, obj));
+        match index {
+            Some(idx) => { 
+                self.objects.remove(idx);
+            },
+            None => {}
+        }
+    }
 }
 impl ggez::event::EventHandler<GameError> for GameState {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
         const DESIRED_FPS: u32 = 60;
         while ctx.time.check_update_time(DESIRED_FPS) {}
-        self.dt = ctx.time.delta();
-
-        for o in self.objects.as_mut_slice() {
+        for o in self.controllables.as_mut_slice() {
             o.process_input(&self.input_manager);
+            o.as_mut_game_object().update();
+        }
+        for o in self.objects.as_mut_slice() {
             o.update();
         }
         self.input_manager.process_input();
@@ -88,16 +111,9 @@ impl ggez::event::EventHandler<GameError> for GameState {
     }
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         let mut canvas = graphics::Canvas::from_frame(ctx, Color::from([0.1, 0.2, 0.3, 1.0]));
-        if self.display_dt {
-            self.dt_text_display.clear();
-            self.dt_text_display.add(self.get_dt_string());
-            canvas.draw(&self.dt_text_display, graphics::DrawParam::from([200.0, 0.0]).color(Color::WHITE),);
+        for i in self.collect_render_instructions() {
+            self.process_render_instruction(i, &mut canvas);
         }
-        self.sort_objects_by_depth();
-        for o in self.objects.as_mut_slice() {
-            o.draw(&mut canvas);
-        }
-
         canvas.finish(ctx)?;
         Ok(())
     }
@@ -112,14 +128,6 @@ impl ggez::event::EventHandler<GameError> for GameState {
             match input.keycode {
                 Some(key) => { self.input_manager.process_input_pressed(input_manager::InputType::Keyboard(key)); },
                 None => {}
-            }
-        }
-        if input.keycode == Some(KeyCode::Escape) {
-            self.dt_format = match self.dt_format {
-                DeltaTimeFormat::Micros => DeltaTimeFormat::Millis,
-                DeltaTimeFormat::Millis => DeltaTimeFormat::Nanos,
-                DeltaTimeFormat::Nanos => DeltaTimeFormat::Secs,
-                DeltaTimeFormat::Secs => DeltaTimeFormat::Micros,
             }
         }
         Ok(())
@@ -185,7 +193,7 @@ fn main() {
         },
         Err(e) => {println!("{}", e)}
     }
-    state.add_object(Box::new(game_object::GameController::new(game_object::BoardContainer::new(pool_map, config))));
+    state.add_controllable(Box::new(game_object::GameController::new(game_object::BoardContainer::new(pool_map, config))));
 
     /* Main game loop */
     let (ctx, event_loop) = ContextBuilder::new("any4", "Act-Novel")
