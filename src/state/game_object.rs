@@ -66,30 +66,63 @@ impl BoardContainer {
 
 pub struct GameController {
     board: BoardContainer,
+    xpos: f32,
+    ypos: f32,
+    x_spacing: f32,
+    objects: Vec<Box<dyn GameObject>>,
     seq_initialized: bool
 }
 impl GameController {
     pub fn new(board: BoardContainer) -> GameController {
         GameController {
             board,
+            xpos: 32.0,
+            ypos: 32.0,
+            x_spacing: 20.0,
+            objects: Vec::new(),
             seq_initialized: false
         }
+    }
+    fn load_board(&mut self) {
+        self.objects.clear();
+        let mut xpos = self.xpos;
+        let ypos = self.ypos;
+        match self.board.get_next_board() {
+            Some(b) => {
+                for item in b.input {
+                    self.objects.push(Box::new(VisibleNumber::new(Fraction::from(item), xpos, ypos, 0, Color::WHITE)));
+                    xpos+=self.x_spacing;
+                }
+                xpos+=self.x_spacing;
+                self.objects.push(Box::new(VisibleNumber::new(Fraction::from(b.target), xpos, ypos, 0, Color::RED)));
+            },
+            None => { self.reinitialize(); }
+        }
+    }
+    fn reinitialize(&mut self) {
+        self.board.generate_new_board_sequence();
+        self.load_board();
     }
 }
 impl GameObject for GameController {
     fn update(&mut self) {
         if !self.seq_initialized {
-            self.board.generate_new_board_sequence();
-
+            self.reinitialize();
             self.seq_initialized = true;
         }
     }
     fn get_depth(&self) -> i32 { return 0; }
+    fn draw(&mut self, _canvas: &mut Canvas) {
+        for o in self.objects.as_mut_slice() {
+            o.draw(_canvas);
+        }
+    }
 }
 impl ControllableGameObject for GameController {
     fn process_input(&mut self, _input_manager: &InputManager) {
         if _input_manager.get_input_state(InputSemantic::Accept) == InputState::Pressed {
-            println!("Accept pressed! (From inside of GameController)")
+            self.load_board();
+            //println!("Accept pressed! (From inside of GameController)")
         }
     }
 }
