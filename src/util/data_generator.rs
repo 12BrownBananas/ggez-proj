@@ -1,19 +1,29 @@
-use queues::IsQueue;
+use std::{
+    fs::{self, File},
+    io::prelude::*,
+    collections::HashMap,
+    ops,
+    path::Path,
+    fmt,
+    str::FromStr
+};
 use slab_tree::*;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde::ser::SerializeStruct;
-use serde::de::{self, Visitor, SeqAccess, MapAccess};
-use std::fs::File;
-use std::io::prelude::*;
-use std::str::FromStr;
+use serde::{
+    Deserialize, 
+    Deserializer, 
+    Serialize, 
+    Serializer,
+    ser::SerializeStruct,
+    de::{
+        self, 
+        Visitor, 
+        SeqAccess, 
+        MapAccess
+    }
+};
 use itertools::Itertools;
-use std::collections::HashMap;
-use std::ops;
-use std::fs;
-use std::path::Path;
 use fraction::{Fraction, Decimal};
-use queues;
-use std::fmt;
+use queues::{self, IsQueue};
 
 const INPUT_FILE_NAME: &str = "rsc/data/difficulty_pools.json";
 const DATA_FILES_LIST: &'static [&'static str] = &[INPUT_FILE_NAME];

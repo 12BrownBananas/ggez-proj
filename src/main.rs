@@ -1,11 +1,14 @@
 mod util;
 mod state;
 
-use ggez::*;
-use ggez::conf::{WindowMode, WindowSetup};
-
-use fraction::Fraction;
-
+use ggez::{
+    event,
+    ContextBuilder,
+    conf::{
+        WindowMode, 
+        WindowSetup
+    }
+};
 use util::data_generator;
 use state::{
     game_object,

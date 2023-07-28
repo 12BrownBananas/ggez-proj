@@ -3,9 +3,12 @@ use crate::state::game_object;
 
 use std::ptr::eq;
 
-use ggez::{Context, GameError, GameResult};
-use ggez::input::keyboard::KeyInput;
-use ggez::graphics::{self, Canvas, Color};
+use ggez::{Context, GameError, GameResult,
+    input::keyboard::KeyInput,
+    graphics::{
+        self, Canvas, Color
+    }
+};
 
 pub enum ObjectGroup {
     Controllable,

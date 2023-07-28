@@ -1,5 +1,7 @@
-use crate::util::input_manager::{InputSemantic, InputState, InputManager};
-use crate::util::data_generator::{self, OpType, DifficultyPools, SetConfig, Board};
+use crate::util::{
+    input_manager::{InputSemantic, InputState, InputManager},
+    data_generator::{self, OpType, DifficultyPools, SetConfig, Board}
+};
 use fraction::Fraction;
 use ggez::graphics::{self, Text, Drawable, Canvas, Color};
 use std::collections::HashMap;
