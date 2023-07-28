@@ -4,9 +4,13 @@ mod state;
 use ggez::*;
 use ggez::conf::{WindowMode, WindowSetup};
 
+use fraction::Fraction;
+
 use util::data_generator;
-use state::game_object;
-use state::state::GameState;
+use state::{
+    game_object,
+    state::GameState
+};
 
 fn main() {
     let mut state  = GameState::new();

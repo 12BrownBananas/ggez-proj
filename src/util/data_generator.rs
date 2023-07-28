@@ -157,7 +157,17 @@ pub fn get_set_of_inputs(mut pool_map: HashMap<String, DifficultyPools>, config:
                         map.hard.remove(index);
                     }
                 }
-                result_vector.push(Board{ target: Fraction::from_str(&target).expect(&format!("Could not convert target {:?} to Fraction.", target)), input: input, difficulty: pool_difficulty } );
+                //NOTE: if &target is "inf", this will panic
+                let mut target_as_fraction;
+                match Fraction::from_str(&target) {
+                    Ok(tar) => { 
+                        target_as_fraction = tar;
+                    }
+                    Err(_) => {
+                        target_as_fraction = Fraction::from(1)/Fraction::from(0);
+                    }
+                }
+                result_vector.push(Board{ target: target_as_fraction, input: input, difficulty: pool_difficulty } );                
             },
             Err(e) => {
                 //we found no viable inputs for the given target
