@@ -3,7 +3,7 @@ use crate::util::{
     data_generator::{self, OpType, DifficultyPools, SetConfig, Board}
 };
 use fraction::Fraction;
-use ggez::graphics::{self, Text, Drawable, Canvas, Color};
+use ggez::{graphics::{self, Text, Drawable, Canvas, Color}, mint::Point2};
 use std::collections::HashMap;
 use queues::*;
 
@@ -78,8 +78,8 @@ impl GameController {
     pub fn new(board: BoardContainer) -> GameController {
         GameController {
             board,
-            xpos: 32.0,
-            ypos: 32.0,
+            xpos: 480.0,//TODO: pass in center coordinates externally
+            ypos: 270.0,
             x_spacing: 20.0,
             objects: Vec::new(),
             seq_initialized: false
@@ -87,16 +87,26 @@ impl GameController {
     }
     fn load_board(&mut self) {
         self.objects.clear();
-        let mut xpos = self.xpos;
-        let ypos = self.ypos;
         match self.board.get_next_board() {
             Some(b) => {
-                for item in b.input {
-                    self.objects.push(Box::new(VisibleNumber::new(Fraction::from(item), xpos, ypos, 0, Color::WHITE)));
-                    xpos+=self.x_spacing;
+                //NOTE: Game Controller is too generic for this. We should construct a board layout manager that has specifically hotbar, target, and workbench fields of fixed size and type.
+                let layout = BoardLayout::new(self.xpos, self.ypos, self.x_spacing, b.input.len()); 
+
+                //hotbar
+                for (item, pos) in b.input.iter().zip(layout.hotbar_pos_vec.iter()) {
+                    self.objects.push(Box::new(VisibleNumber::new(Some(Fraction::from(*item)), pos.x, pos.y, 0, Color::WHITE)));
                 }
-                xpos+=self.x_spacing;
-                self.objects.push(Box::new(VisibleNumber::new(Fraction::from(b.target), xpos, ypos, 0, Color::RED)));
+
+                //target
+                self.objects.push(Box::new(VisibleNumber::new(Some(Fraction::from(b.target)), layout.target_pos.x, layout.target_pos.y, 0, Color::RED)));
+
+                //workbench
+                let first_pos = layout.workbench_pos_vec.get(0).expect("Could not get first position from workbench position vector.");
+                let second_pos = layout.workbench_pos_vec.get(1).expect("Could not get second position from workbench position vector.");
+                let third_pos = layout.workbench_pos_vec.get(2).expect("Could not get third position from workbench position vector.");
+                self.objects.push(Box::new(VisibleNumber::new(None, first_pos.x, first_pos.y, 0, Color::WHITE)));
+                self.objects.push(Box::new(VisibleOperation::new(second_pos.x, second_pos.y, 0, Color::WHITE)));
+                self.objects.push(Box::new(VisibleNumber::new(None, third_pos.x, third_pos.y, 0, Color::WHITE)));
             },
             None => { self.reinitialize(); }
         }
@@ -189,24 +199,68 @@ impl GameObject for VisibleOperation {
 }
 
 pub struct VisibleNumber {
-    value: Fraction,
+    value: Option<Fraction>,
     render_text: RenderText
 }
 impl VisibleNumber {
-    pub fn new(value: Fraction, x: f32, y: f32, depth: i32, text_color: Color) -> VisibleNumber {
+    pub fn new(value: Option<Fraction>, x: f32, y: f32, depth: i32, text_color: Color) -> VisibleNumber {
+        let text;
+        match value {
+            Some(val) => { text = val.to_string() },
+            None => { text = "".to_string() }
+        }
         VisibleNumber {
             value,
-            render_text: RenderText::new(x, y, depth, &value.to_string(), text_color)
+            render_text: RenderText::new(x, y, depth, &text, text_color)
         }
     }
-    pub fn update_value(&mut self, new_value: Fraction) {
+    pub fn update_value(&mut self, new_value: Option<Fraction>) {
         self.value = new_value;
-        self.render_text.set_text(self.value.to_string());
+        match self.value {
+            Some(val) => {self.render_text.set_text(val.to_string());},
+            None => { self.render_text.set_text("".to_string()) }
+        }
     }
 }
 impl GameObject for VisibleNumber {
     fn get_depth(&self) -> i32 { self.render_text.transform.depth }
     fn draw(&mut self, _canvas: &mut Canvas) {
         self.render_text.draw(_canvas);
+    }
+}
+
+pub struct BoardLayout {
+    hotbar_pos_vec: Vec<Point2<f32>>,
+    workbench_pos_vec: Vec<Point2<f32>>,
+    target_pos: Point2<f32>
+}
+impl BoardLayout {
+    pub fn new(center_x: f32, center_y: f32, target_offset: f32, items: usize) -> BoardLayout {
+        let hll = HorizontalListLayout {
+            transform: Transform {x: center_x, y: center_y, depth: 0},
+            x_spacing: 40.0
+        };
+        BoardLayout {
+            hotbar_pos_vec: hll.get_points(items),
+            workbench_pos_vec: hll.get_points(3),
+            target_pos: Point2 { x: center_x, y: center_y-target_offset}
+        }
+    }
+}
+pub struct HorizontalListLayout {
+    transform: Transform,
+    x_spacing: f32
+}
+impl HorizontalListLayout {
+    pub fn get_points(&self, input_size: usize) -> Vec<Point2<f32>> {
+        let mut vec = Vec::new();
+        let width = (input_size as f32)*self.x_spacing;
+        let left = self.transform.x-width/2.0;
+        let mut i = 0.0;
+        while i < width {
+            vec.push(Point2{ x: left+i, y: self.transform.y });
+            i+=self.x_spacing;
+        }
+        return vec;
     }
 }
