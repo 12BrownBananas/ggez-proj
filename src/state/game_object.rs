@@ -177,6 +177,34 @@ impl GameController {
             None => { self.reinitialize(); }
         }
     }
+    fn get_open_workbench_slot(&mut self) -> Option<&mut VisibleNumber> {
+        if self.visible_board.is_some() {
+            let vb = self.visible_board.as_mut().expect("");
+            if vb.workbench_left.value.is_none() { return Some(&mut vb.workbench_left); }
+            else if vb.workbench_right.value.is_none() { return Some(&mut vb.workbench_right); }
+        }
+        None
+    }
+    fn try_move_number_to_workbench(&mut self, index: usize) -> bool {
+        if let Some(vb) = &mut self.visible_board {
+            if let Some(num) = vb.hotbar.get_mut(index) {
+                let num_value = num.value.expect("");
+                if let Some(slot) = self.get_open_workbench_slot() {
+                    slot.update_value(Some(num_value));
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    fn set_visible_operation(&mut self, op_type: OpType) {
+        if let Some(vb) = &mut self.visible_board {
+            vb.workbench_center.set_operation(op_type);
+        }
+    }
+    fn undo_last_action(&mut self) {
+        //Does nothing yet
+    }
     fn reinitialize(&mut self) {
         self.board.generate_new_board_sequence();
         self.load_board();
@@ -199,8 +227,35 @@ impl GameObject for GameController {
 impl ControllableGameObject for GameController {
     fn process_input(&mut self, _input_manager: &InputManager) {
         if _input_manager.get_input_state(InputSemantic::Accept) == InputState::Pressed {
-            self.load_board();
-            //println!("Accept pressed! (From inside of GameController)")
+            self.load_board(); //debug
+        }
+            
+        if _input_manager.get_input_state(InputSemantic::Hotbar1) == InputState::Pressed {
+            self.try_move_number_to_workbench(0);
+        }
+        if _input_manager.get_input_state(InputSemantic::Hotbar2) == InputState::Pressed {
+            self.try_move_number_to_workbench(1);
+        }
+        if _input_manager.get_input_state(InputSemantic::Hotbar3) == InputState::Pressed {
+            self.try_move_number_to_workbench(2);
+        }
+        if _input_manager.get_input_state(InputSemantic::Hotbar4) == InputState::Pressed {
+            self.try_move_number_to_workbench(3);
+        }
+        if _input_manager.get_input_state(InputSemantic::Plus) == InputState::Pressed {
+            self.set_visible_operation(OpType::Plus);
+        }
+        if _input_manager.get_input_state(InputSemantic::Minus) == InputState::Pressed {
+            self.set_visible_operation(OpType::Minus);
+        }
+        if _input_manager.get_input_state(InputSemantic::Multiply) == InputState::Pressed {
+            self.set_visible_operation(OpType::Multiply);
+        }
+        if _input_manager.get_input_state(InputSemantic::Divide) == InputState::Pressed {
+            self.set_visible_operation(OpType::Divide);
+        }
+        if _input_manager.get_input_state(InputSemantic::Back) == InputState::Pressed {
+            self.undo_last_action();
         }
     }
 }
@@ -260,7 +315,7 @@ impl VisibleOperation {
 impl GameObject for VisibleOperation {
     fn get_depth(&self) -> i32 { self.render_text.transform.depth }
     fn draw(&mut self, _canvas: &mut Canvas) {
-
+        self.render_text.draw(_canvas);
     }
 }
 
@@ -303,12 +358,16 @@ pub struct BoardLayout {
 impl BoardLayout {
     pub fn new(center_x: f32, center_y: f32, target_offset: f32, items: usize) -> BoardLayout {
         let hll = HorizontalListLayout {
+            transform: Transform {x: center_x, y: center_y+40.0, depth: 0},
+            x_spacing: 40.0
+        };
+        let hll_2 = HorizontalListLayout {
             transform: Transform {x: center_x, y: center_y, depth: 0},
             x_spacing: 40.0
         };
         BoardLayout {
             hotbar_pos_vec: hll.get_points(items),
-            workbench_pos_vec: hll.get_points(3),
+            workbench_pos_vec: hll_2.get_points(3),
             target_pos: Point2 { x: center_x, y: center_y-target_offset}
         }
     }

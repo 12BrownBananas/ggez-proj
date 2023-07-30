@@ -239,7 +239,8 @@ fn get_any4_input_manager() -> input_manager::InputManager {
         input_manager::InputSemantic::Plus, 
         Box::new(input_manager::KeyboardInputProcessor::new(
             vec!(
-                ggez::input::keyboard::KeyCode::Plus
+                ggez::input::keyboard::KeyCode::Plus,
+                ggez::input::keyboard::KeyCode::NumpadAdd
             )
         ))
     );
@@ -247,7 +248,8 @@ fn get_any4_input_manager() -> input_manager::InputManager {
         input_manager::InputSemantic::Minus, 
         Box::new(input_manager::KeyboardInputProcessor::new(
             vec!(
-                ggez::input::keyboard::KeyCode::Minus
+                ggez::input::keyboard::KeyCode::Minus,
+                ggez::input::keyboard::KeyCode::NumpadSubtract
             )
         ))
     );
