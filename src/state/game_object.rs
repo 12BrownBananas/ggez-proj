@@ -9,7 +9,7 @@ use queues::*;
 
 pub trait GameObject: AsGameObject {
     fn draw(&mut self, _canvas: &mut Canvas) {}
-    fn get_depth(&self) -> i32;
+    fn get_depth(&self) -> i32 { 0 }
     fn update(&mut self) {}
 }
 pub trait ControllableGameObject : GameObject {
@@ -35,6 +35,86 @@ pub struct Transform {
     depth: i32
 }
 
+struct VisibleBoard {
+    hotbar: Vec<Box<VisibleNumber>>,
+    target: VisibleNumber,
+    workbench_left: VisibleNumber,
+    workbench_right: VisibleNumber,
+    workbench_center: VisibleOperation,
+}
+impl VisibleBoard {
+    fn new(b: &Board, layout: &BoardLayout) -> VisibleBoard {
+        //hotbar
+        let mut hotbar = Vec::new();
+        for (item, pos) in b.input.iter().zip(layout.hotbar_pos_vec.iter()) {
+            hotbar.push(
+                Box::new(
+                    VisibleNumber::new(
+                        Some(Fraction::from(*item)), 
+                        pos.x, 
+                        pos.y, 
+                        0, 
+                        Color::WHITE
+                    )
+                )
+            )
+        }
+        //target
+        let target = VisibleNumber::new(
+            Some(Fraction::from(b.target)), 
+            layout.target_pos.x, 
+            layout.target_pos.y, 
+            0, 
+            Color::RED
+        );
+
+            //workbench
+            let first_pos = layout.workbench_pos_vec.get(0).expect("Could not get first position from workbench position vector.");
+            let second_pos = layout.workbench_pos_vec.get(1).expect("Could not get second position from workbench position vector.");
+            let third_pos = layout.workbench_pos_vec.get(2).expect("Could not get third position from workbench position vector.");
+            
+            let workbench_left = VisibleNumber::new(
+                None, 
+                first_pos.x, 
+                first_pos.y, 
+                0, 
+                Color::WHITE
+            );
+            let workbench_center = VisibleOperation::new(
+                second_pos.x, 
+                second_pos.y, 
+                0, 
+                Color::WHITE
+            );
+            let workbench_right = VisibleNumber::new(
+                None, 
+                third_pos.x, 
+                third_pos.y, 
+                0, 
+                Color::WHITE
+            );
+
+        VisibleBoard {
+            hotbar,
+            target,
+            workbench_left,
+            workbench_center,
+            workbench_right
+        }
+    }
+}
+impl GameObject for VisibleBoard {
+    fn draw(&mut self, _canvas: &mut Canvas) {
+        for item in self.hotbar.as_mut_slice() {
+            item.draw(_canvas);
+        }
+        self.target.draw(_canvas);
+        self.workbench_left.draw(_canvas);
+        self.workbench_center.draw(_canvas);
+        self.workbench_right.draw(_canvas);
+    }
+}
+
 pub struct BoardContainer {
     pool_map: HashMap<String, DifficultyPools>,
     config: SetConfig,
@@ -45,7 +125,7 @@ impl BoardContainer {
         BoardContainer {
             pool_map,
             config,
-            sequence: Queue::new()
+            sequence: Queue::new(),
         }
     }
     pub fn generate_new_board_sequence(&mut self) {
@@ -71,7 +151,7 @@ pub struct GameController {
     xpos: f32,
     ypos: f32,
     x_spacing: f32,
-    objects: Vec<Box<dyn GameObject>>,
+    visible_board: Option<VisibleBoard>,
     seq_initialized: bool
 }
 impl GameController {
@@ -81,32 +161,18 @@ impl GameController {
             xpos: 480.0,//TODO: pass in center coordinates externally
             ypos: 270.0,
             x_spacing: 20.0,
-            objects: Vec::new(),
+            visible_board: None,
             seq_initialized: false
         }
     }
     fn load_board(&mut self) {
-        self.objects.clear();
+        self.visible_board = None;
         match self.board.get_next_board() {
             Some(b) => {
                 //NOTE: Game Controller is too generic for this. We should construct a board layout manager that has specifically hotbar, target, and workbench fields of fixed size and type.
                 let layout = BoardLayout::new(self.xpos, self.ypos, self.x_spacing, b.input.len()); 
-
-                //hotbar
-                for (item, pos) in b.input.iter().zip(layout.hotbar_pos_vec.iter()) {
-                    self.objects.push(Box::new(VisibleNumber::new(Some(Fraction::from(*item)), pos.x, pos.y, 0, Color::WHITE)));
-                }
-
-                //target
-                self.objects.push(Box::new(VisibleNumber::new(Some(Fraction::from(b.target)), layout.target_pos.x, layout.target_pos.y, 0, Color::RED)));
-
-                //workbench
-                let first_pos = layout.workbench_pos_vec.get(0).expect("Could not get first position from workbench position vector.");
-                let second_pos = layout.workbench_pos_vec.get(1).expect("Could not get second position from workbench position vector.");
-                let third_pos = layout.workbench_pos_vec.get(2).expect("Could not get third position from workbench position vector.");
-                self.objects.push(Box::new(VisibleNumber::new(None, first_pos.x, first_pos.y, 0, Color::WHITE)));
-                self.objects.push(Box::new(VisibleOperation::new(second_pos.x, second_pos.y, 0, Color::WHITE)));
-                self.objects.push(Box::new(VisibleNumber::new(None, third_pos.x, third_pos.y, 0, Color::WHITE)));
+                
+                self.visible_board = Some(VisibleBoard::new(&b, &layout));
             },
             None => { self.reinitialize(); }
         }
@@ -125,8 +191,8 @@ impl GameObject for GameController {
     }
     fn get_depth(&self) -> i32 { return 0; }
     fn draw(&mut self, _canvas: &mut Canvas) {
-        for o in self.objects.as_mut_slice() {
-            o.draw(_canvas);
+        if self.visible_board.is_some() {
+            self.visible_board.as_mut().expect("Visible board was unexpectedly None (in GameController)").draw(_canvas);
         }
     }
 }
