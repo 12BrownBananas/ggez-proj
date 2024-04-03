@@ -29,7 +29,7 @@ const INPUT_FILE_NAME: &str = "rsc/data/difficulty_pools.json";
 const DATA_FILES_LIST: &'static [&'static str] = &[INPUT_FILE_NAME];
 
 /* #region Public Interface */
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub enum OpType {
     Plus,
     Minus,

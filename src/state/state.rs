@@ -240,7 +240,8 @@ fn get_any4_input_manager() -> input_manager::InputManager {
         Box::new(input_manager::KeyboardInputProcessor::new(
             vec!(
                 ggez::input::keyboard::KeyCode::Plus,
-                ggez::input::keyboard::KeyCode::NumpadAdd
+                ggez::input::keyboard::KeyCode::NumpadAdd,
+                ggez::input::keyboard::KeyCode::Equals
             )
         ))
     );
@@ -259,7 +260,8 @@ fn get_any4_input_manager() -> input_manager::InputManager {
             vec!(
                 ggez::input::keyboard::KeyCode::X,
                 ggez::input::keyboard::KeyCode::Asterisk,
-                ggez::input::keyboard::KeyCode::NumpadMultiply
+                ggez::input::keyboard::KeyCode::NumpadMultiply,
+                ggez::input::keyboard::KeyCode::Key8
             )
         ))
     );

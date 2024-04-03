@@ -34,6 +34,14 @@ pub struct Transform {
     y: f32,
     depth: i32
 }
+#[derive(Clone)]
+struct BoardState {
+    hotbar_values: Vec<Option<Fraction>>,
+    target_value: Option<Fraction>,
+    workbench_left_value: Option<Fraction>,
+    workbench_center_value: OpType,
+    workbench_right_value: Option<Fraction>
+}
 
 struct VisibleBoard {
     hotbar: Vec<Box<VisibleNumber>>,
@@ -102,6 +110,31 @@ impl VisibleBoard {
             workbench_right
         }
     }
+
+    fn load_board_state(&mut self, state: BoardState) {
+        for (item, val) in self.hotbar.iter_mut().zip(state.hotbar_values) {
+            item.update_value(val);
+        }
+
+        self.target.value = state.target_value;
+        self.workbench_left.update_value(state.workbench_left_value);
+        self.workbench_right.update_value(state.workbench_right_value);
+        self.workbench_center.set_operation(state.workbench_center_value);
+    }
+
+    fn get_board_state(&self) -> BoardState {
+        let mut hotbar_values = Vec::new();
+        for item in self.hotbar.iter() {
+            hotbar_values.push(item.value)
+        }
+        BoardState {
+            hotbar_values,
+            target_value: self.target.value,
+            workbench_left_value: self.workbench_left.value,
+            workbench_center_value: self.workbench_center.value.clone(),
+            workbench_right_value: self.workbench_right.value
+        }
+    }
 }
 impl GameObject for VisibleBoard {
     fn draw(&mut self, _canvas: &mut Canvas) {
@@ -152,7 +185,8 @@ pub struct GameController {
     ypos: f32,
     x_spacing: f32,
     visible_board: Option<VisibleBoard>,
-    seq_initialized: bool
+    seq_initialized: bool,
+    history: Vec<BoardState>
 }
 impl GameController {
     pub fn new(board: BoardContainer) -> GameController {
@@ -162,7 +196,8 @@ impl GameController {
             ypos: 270.0,
             x_spacing: 20.0,
             visible_board: None,
-            seq_initialized: false
+            seq_initialized: false,
+            history: Vec::new()
         }
     }
     fn load_board(&mut self) {
@@ -173,6 +208,7 @@ impl GameController {
                 let layout = BoardLayout::new(self.xpos, self.ypos, self.x_spacing, b.input.len()); 
                 
                 self.visible_board = Some(VisibleBoard::new(&b, &layout));
+                self.history.clear();
             },
             None => { self.reinitialize(); }
         }
@@ -185,25 +221,86 @@ impl GameController {
         }
         None
     }
-    fn try_move_number_to_workbench(&mut self, index: usize) -> bool {
-        if let Some(vb) = &mut self.visible_board {
-            if let Some(num) = vb.hotbar.get_mut(index) {
-                let num_value = num.value.expect("");
-                if let Some(slot) = self.get_open_workbench_slot() {
-                    slot.update_value(Some(num_value));
-                    return true;
+    fn try_compute(&mut self) {
+        self.history.push(self.visible_board.as_ref().expect("").get_board_state());
+        let mut success = true;
+        let mut result: Option<Fraction> = None;
+        let mut target: Option<Fraction> = None;
+        let mut all_values_exhausted = false;
+        if self.visible_board.is_some() {
+            let vb = self.visible_board.as_mut().expect("");
+            if vb.workbench_left.value.is_some() && 
+                vb.workbench_right.value.is_some() &&
+                vb.workbench_center.value != OpType::None
+            {
+                let mut val = None;
+                match vb.workbench_center.value {
+                    OpType::Plus => val = Some(vb.workbench_left.value.expect("") + vb.workbench_right.value.expect("")),
+                    OpType::Minus => val = Some(vb.workbench_left.value.expect("") - vb.workbench_right.value.expect("")),
+                    OpType::Multiply => val = Some(vb.workbench_left.value.expect("") * vb.workbench_right.value.expect("")),
+                    OpType::Divide => val = Some(vb.workbench_left.value.expect("") / vb.workbench_right.value.expect("")),
+                    _ => {success = false;}
+                }
+                vb.workbench_left.update_value(val);
+                vb.workbench_right.update_value(None);
+                vb.workbench_center.set_operation(OpType::None);
+                result = vb.workbench_left.value;
+                target = vb.target.value;
+                all_values_exhausted = true;
+                for item in vb.hotbar.iter() {
+                    if item.value != None {
+                        all_values_exhausted = false;
+                    }
                 }
             }
         }
-        return false;
+        if !success {
+            self.history.truncate(self.history.len().saturating_sub(1)); //Delete previous board state (nothing changed)
+        }
+        else {
+            if result == target && all_values_exhausted {
+                //Win
+                println!("Value {:?} was successfully reached! (Victory)", target);
+                self.load_board(); //Infinite gameplay!
+            }
+        }
+    }
+    fn try_move_number_to_workbench(&mut self, index: usize) -> bool {
+        self.history.push(self.visible_board.as_ref().expect("").get_board_state());
+        let mut value_updated = false;
+        if let Some(vb) = &mut self.visible_board {
+            if let Some(num) = vb.hotbar.get_mut(index) {
+                if num.value != None {
+                    let num_value = num.value.expect("");
+                    if let Some(slot) = self.get_open_workbench_slot() {
+                        slot.update_value(Some(num_value));
+                        value_updated = true;
+                    }
+                }
+            }
+        }
+        if !value_updated {
+            self.history.truncate(self.history.len().saturating_sub(1)); //Delete newly-added board state
+        }
+        else {
+            if let Some(vb) = &mut self.visible_board {
+                if let Some(num) = vb.hotbar.get_mut(index) {
+                    num.update_value(None);
+                }
+            }
+        }
+        return value_updated;
     }
     fn set_visible_operation(&mut self, op_type: OpType) {
+        self.history.push(self.visible_board.as_ref().expect("").get_board_state());
         if let Some(vb) = &mut self.visible_board {
             vb.workbench_center.set_operation(op_type);
         }
     }
     fn undo_last_action(&mut self) {
-        //Does nothing yet
+        if self.history.is_empty() { return; } //Does nothing if no history.
+        self.visible_board.as_mut().expect("").load_board_state(self.history.last().expect("").clone()); //Read previous board state from history
+        self.history.truncate(self.history.len().saturating_sub(1)); //Delete previous board state 
     }
     fn reinitialize(&mut self) {
         self.board.generate_new_board_sequence();
@@ -227,7 +324,7 @@ impl GameObject for GameController {
 impl ControllableGameObject for GameController {
     fn process_input(&mut self, _input_manager: &InputManager) {
         if _input_manager.get_input_state(InputSemantic::Accept) == InputState::Pressed {
-            self.load_board(); //debug
+            self.try_compute();
         }
             
         if _input_manager.get_input_state(InputSemantic::Hotbar1) == InputState::Pressed {
